@@ -10,7 +10,7 @@ func TestStoreMigration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore(:memory:) error: %v", err)
 	}
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 }
 
 func TestStoreLibraryCRUD(t *testing.T) {
@@ -18,7 +18,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore error: %v", err)
 	}
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	lib := Library{
 		Name:      "mylib",
@@ -138,7 +138,7 @@ func TestStoreChunks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OpenStore error: %v", err)
 	}
-	defer s.Close()
+	defer s.Close() //nolint:errcheck
 
 	lib := Library{
 		Name:      "testlib",

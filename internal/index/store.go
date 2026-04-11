@@ -48,13 +48,13 @@ func OpenStore(dsn string) (*Store, error) {
 
 	// Enable WAL mode for better concurrency.
 	if _, err := db.Exec(`PRAGMA journal_mode=WAL`); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("set WAL mode: %w", err)
 	}
 
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
 
@@ -151,7 +151,7 @@ func (s *Store) ListLibraries() ([]Library, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list libraries: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var libs []Library
 	for rows.Next() {
@@ -219,7 +219,7 @@ func (s *Store) FindLibraries(query string) ([]Library, error) {
 	if err != nil {
 		return nil, fmt.Errorf("find libraries: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var libs []Library
 	for rows.Next() {

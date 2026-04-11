@@ -83,7 +83,7 @@ func (p *ConfluenceProvider) Resolve(ctx context.Context, ref string) (string, e
 
 	h := sha256.New()
 	for _, pg := range pages {
-		fmt.Fprintf(h, "%s:%d\n", pg.ID, pg.Version)
+		fmt.Fprintf(h, "%s:%d\n", pg.ID, pg.Version) //nolint:errcheck
 	}
 	hex := fmt.Sprintf("%x", h.Sum(nil))
 	if len(hex) > 40 {
@@ -233,7 +233,7 @@ func (p *ConfluenceProvider) fetchPage(ctx context.Context, pageID string, withB
 	if err != nil {
 		return confluencePage{}, err
 	}
-	defer body.Close()
+	defer body.Close() //nolint:errcheck
 
 	var raw struct {
 		ID      string `json:"id"`
@@ -308,10 +308,10 @@ func (p *ConfluenceProvider) fetchDescendants(ctx context.Context, rootID string
 			Size  int `json:"size"`
 		}
 		if err := json.NewDecoder(body).Decode(&result); err != nil {
-			body.Close()
+			_ = body.Close()
 			return nil, fmt.Errorf("decoding search results: %w", err)
 		}
-		body.Close()
+		_ = body.Close()
 
 		for _, r := range result.Results {
 			pg := confluencePage{
@@ -355,7 +355,7 @@ func (p *ConfluenceProvider) doGet(ctx context.Context, rawURL string) (io.ReadC
 
 		// Retry on 429 or 503.
 		if (resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable) && attempt < len(delays) {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 
 			delay := delays[attempt]
 			if ra := resp.Header.Get("Retry-After"); ra != "" {
@@ -368,7 +368,7 @@ func (p *ConfluenceProvider) doGet(ctx context.Context, rawURL string) (io.ReadC
 		}
 
 		bodyBytes, _ := io.ReadAll(resp.Body)
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		return nil, fmt.Errorf("confluence API returned %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 }

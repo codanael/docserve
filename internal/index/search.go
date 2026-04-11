@@ -35,7 +35,7 @@ func (s *Store) SearchDocs(libraryID int64, query string, maxTokens int) ([]Sear
 	if err != nil {
 		return nil, fmt.Errorf("fts search: %w", err)
 	}
-	defer rows.Close()
+	defer rows.Close() //nolint:errcheck
 
 	var results []SearchResult
 	tokensUsed := 0

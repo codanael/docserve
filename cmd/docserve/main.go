@@ -106,7 +106,7 @@ func buildClients(cfg *config.Config) (proxied, direct *http.Client) {
 func cmdServe(args []string) {
 	cfg, _ := loadConfig(args)
 	store := openStore(cfg)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	proxied, direct := buildClients(cfg)
 
@@ -201,7 +201,7 @@ func cmdFetch(args []string) {
 	}
 
 	store := openStore(cfg)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	proxied, direct := buildClients(cfg)
 
@@ -249,7 +249,7 @@ func cmdFetch(args []string) {
 func cmdList(args []string) {
 	cfg, _ := loadConfig(args)
 	store := openStore(cfg)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	libs, err := store.ListLibraries()
 	if err != nil {
@@ -308,7 +308,7 @@ func cmdSearch(args []string) {
 	}
 
 	store := openStore(cfg)
-	defer store.Close()
+	defer store.Close() //nolint:errcheck
 
 	lib, err := store.GetLibrary(libraryName)
 	if err != nil {

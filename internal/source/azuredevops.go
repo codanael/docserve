@@ -56,7 +56,7 @@ func (p *AzureDevOpsProvider) Resolve(ctx context.Context, ref string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("azure devops resolve request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -102,7 +102,7 @@ func (p *AzureDevOpsProvider) Fetch(ctx context.Context, sha string, paths []str
 	if err != nil {
 		return fmt.Errorf("azure devops fetch request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -151,18 +151,18 @@ func extractZip(data []byte, destDir string, paths []string) error {
 
 		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 		if err != nil {
-			rc.Close()
+			_ = rc.Close()
 			return fmt.Errorf("creating file %s: %w", target, err)
 		}
 
 		if _, err := io.Copy(out, rc); err != nil {
-			rc.Close()
-			out.Close()
+			_ = rc.Close()
+			_ = out.Close()
 			return fmt.Errorf("writing file %s: %w", target, err)
 		}
 
-		rc.Close()
-		out.Close()
+		_ = rc.Close()
+		_ = out.Close()
 	}
 
 	return nil

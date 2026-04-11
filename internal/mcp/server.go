@@ -74,16 +74,16 @@ func (s *Server) Handler() http.Handler {
 	// Health check endpoints
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		fmt.Fprint(w, "ok")
+		_, _ = fmt.Fprint(w, "ok") //nolint:errcheck
 	})
 
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
 		if s.store.Ready() {
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, "ready")
+			_, _ = fmt.Fprint(w, "ready") //nolint:errcheck
 		} else {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			fmt.Fprint(w, "not ready")
+			_, _ = fmt.Fprint(w, "not ready") //nolint:errcheck
 		}
 	})
 

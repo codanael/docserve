@@ -12,7 +12,7 @@ func testLibrary(t *testing.T) (*Store, int64) {
 	if err != nil {
 		t.Fatalf("OpenStore error: %v", err)
 	}
-	t.Cleanup(func() { s.Close() })
+	t.Cleanup(func() { _ = s.Close() })
 
 	libID, err := s.UpsertLibrary(Library{
 		Name:      "testlib",

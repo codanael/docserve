@@ -64,7 +64,7 @@ func (p *GitHubProvider) Resolve(ctx context.Context, ref string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("github resolve request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -116,7 +116,7 @@ func (p *GitHubProvider) Fetch(ctx context.Context, sha string, paths []string, 
 	if err != nil {
 		return fmt.Errorf("github fetch request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer resp.Body.Close() //nolint:errcheck
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -133,7 +133,7 @@ func extractTarGz(r io.Reader, destDir string, paths []string) error {
 	if err != nil {
 		return fmt.Errorf("opening gzip stream: %w", err)
 	}
-	defer gz.Close()
+	defer gz.Close() //nolint:errcheck
 
 	tr := tar.NewReader(gz)
 
@@ -165,7 +165,7 @@ func extractTarGz(r io.Reader, destDir string, paths []string) error {
 				return fmt.Errorf("creating directory %s: %w", target, err)
 			}
 
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
 				return fmt.Errorf("creating parent directory for %s: %w", target, err)
 			}
@@ -176,10 +176,10 @@ func extractTarGz(r io.Reader, destDir string, paths []string) error {
 			}
 
 			if _, err := io.Copy(f, tr); err != nil {
-				f.Close()
+				_ = f.Close()
 				return fmt.Errorf("writing file %s: %w", target, err)
 			}
-			f.Close()
+			_ = f.Close()
 
 		default:
 			// Ignore symlinks, hard links, etc.

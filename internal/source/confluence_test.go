@@ -60,7 +60,7 @@ func newConfluenceTestServer(t *testing.T, pages map[string]map[string]any, sear
 				http.Error(w, fmt.Sprintf("page %s not found", id), http.StatusNotFound)
 				return
 			}
-			json.NewEncoder(w).Encode(pg)
+			json.NewEncoder(w).Encode(pg) //nolint:errcheck
 			return
 		}
 
@@ -72,7 +72,7 @@ func newConfluenceTestServer(t *testing.T, pages map[string]map[string]any, sear
 				"limit":   200,
 				"size":    len(searchResults),
 			}
-			json.NewEncoder(w).Encode(envelope)
+			json.NewEncoder(w).Encode(envelope) //nolint:errcheck
 			return
 		}
 
@@ -318,19 +318,19 @@ func TestConfluenceFetchRetryOn503(t *testing.T) {
 		// the first endpoint hit (single page fetch for root).
 		if strings.HasPrefix(r.URL.Path, "/rest/api/content/100") && !strings.Contains(r.URL.Path, "search") && n <= 2 {
 			w.WriteHeader(http.StatusServiceUnavailable)
-			w.Write([]byte(`{"message":"service unavailable"}`))
+			w.Write([]byte(`{"message":"service unavailable"}`)) //nolint:errcheck
 			return
 		}
 
 		// Single page endpoint
 		if strings.HasPrefix(r.URL.Path, "/rest/api/content/") && !strings.Contains(r.URL.Path, "/search") {
-			json.NewEncoder(w).Encode(root)
+			json.NewEncoder(w).Encode(root) //nolint:errcheck
 			return
 		}
 
 		// Search endpoint: no descendants
 		if r.URL.Path == "/rest/api/content/search" {
-			json.NewEncoder(w).Encode(map[string]any{
+			json.NewEncoder(w).Encode(map[string]any{ //nolint:errcheck
 				"results": []any{},
 				"start":   0,
 				"limit":   200,
