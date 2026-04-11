@@ -12,7 +12,7 @@ import (
 	"github.com/codanael/docserve/internal/index"
 )
 
-// setupTestStore creates an in-memory store with 2 libraries (spring-boot + angular) with some chunks.
+// setupTestStore creates an in-memory store with 2 libraries and some chunks.
 func setupTestStore(t *testing.T) *index.Store {
 	t.Helper()
 	store, err := index.OpenStore(":memory:")
@@ -21,7 +21,6 @@ func setupTestStore(t *testing.T) *index.Store {
 	}
 	t.Cleanup(func() { store.Close() })
 
-	// Insert spring-boot library
 	springID, err := store.UpsertLibrary(index.Library{
 		Name:      "spring-boot",
 		Repo:      "github.com/spring-projects/spring-boot",
@@ -32,25 +31,14 @@ func setupTestStore(t *testing.T) *index.Store {
 	if err != nil {
 		t.Fatalf("UpsertLibrary spring-boot: %v", err)
 	}
-
-	// Insert spring-boot chunks
 	err = store.ReplaceChunks(springID, []index.Chunk{
-		{
-			Path:       "docs/actuator.md",
-			Breadcrumb: "Spring Boot Actuator",
-			Content:    "Spring Boot Actuator provides health endpoint for monitoring. The health endpoint returns application health status.",
-		},
-		{
-			Path:       "docs/auto-config.md",
-			Breadcrumb: "Auto Configuration",
-			Content:    "Spring Boot auto-configures beans based on the classpath. DataSource auto-configuration sets up database connections.",
-		},
+		{Path: "docs/actuator.md", Breadcrumb: "Spring Boot Actuator", Content: "Spring Boot Actuator provides health endpoint for monitoring."},
+		{Path: "docs/auto-config.md", Breadcrumb: "Auto Configuration", Content: "Spring Boot auto-configures beans based on the classpath."},
 	})
 	if err != nil {
 		t.Fatalf("ReplaceChunks spring-boot: %v", err)
 	}
 
-	// Insert angular library
 	angularID, err := store.UpsertLibrary(index.Library{
 		Name:      "angular",
 		Repo:      "github.com/angular/angular",
@@ -61,19 +49,8 @@ func setupTestStore(t *testing.T) *index.Store {
 	if err != nil {
 		t.Fatalf("UpsertLibrary angular: %v", err)
 	}
-
-	// Insert angular chunks
 	err = store.ReplaceChunks(angularID, []index.Chunk{
-		{
-			Path:       "docs/components.md",
-			Breadcrumb: "Components",
-			Content:    "Angular components are the building blocks of Angular applications. Each component has a template, styles, and logic.",
-		},
-		{
-			Path:       "docs/services.md",
-			Breadcrumb: "Services",
-			Content:    "Angular services provide shared functionality across components. Dependency injection makes services available everywhere.",
-		},
+		{Path: "docs/components.md", Breadcrumb: "Components", Content: "Angular components are the building blocks of Angular applications."},
 	})
 	if err != nil {
 		t.Fatalf("ReplaceChunks angular: %v", err)
@@ -97,25 +74,32 @@ func TestListLibraries(t *testing.T) {
 		t.Fatalf("ListLibraries error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("expected success, got error: %v", result.Content[0].(mcplib.TextContent).Text)
+		t.Fatalf("unexpected error")
 	}
 
+	// Verify structuredContent is set.
+	if result.StructuredContent == nil {
+		t.Fatal("expected structuredContent to be set")
+	}
+	entries, ok := result.StructuredContent.([]libEntry)
+	if !ok {
+		t.Fatalf("structuredContent type = %T, want []libEntry", result.StructuredContent)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(entries))
+	}
+	if entries[0].Name != "angular" {
+		t.Errorf("first entry name = %q, want angular", entries[0].Name)
+	}
+
+	// Verify text fallback is valid JSON.
 	text := result.Content[0].(mcplib.TextContent).Text
-	var libs []map[string]any
-	if err := json.Unmarshal([]byte(text), &libs); err != nil {
-		t.Fatalf("unmarshal result: %v", err)
+	var fallback []map[string]any
+	if err := json.Unmarshal([]byte(text), &fallback); err != nil {
+		t.Fatalf("text fallback is not valid JSON: %v", err)
 	}
-
-	if len(libs) != 2 {
-		t.Fatalf("expected 2 libraries, got %d", len(libs))
-	}
-
-	// Verify both libraries are present (ordered by name: angular, spring-boot)
-	if libs[0]["name"] != "angular" {
-		t.Errorf("expected first library to be 'angular', got %q", libs[0]["name"])
-	}
-	if libs[1]["name"] != "spring-boot" {
-		t.Errorf("expected second library to be 'spring-boot', got %q", libs[1]["name"])
+	if len(fallback) != 2 {
+		t.Errorf("text fallback has %d entries, want 2", len(fallback))
 	}
 }
 
@@ -125,20 +109,28 @@ func TestResolveLibrary(t *testing.T) {
 
 	result, err := h.ResolveLibrary(context.Background(), makeRequest(map[string]any{"query": "spring"}))
 	if err != nil {
-		t.Fatalf("ResolveLibrary error: %v", err)
+		t.Fatalf("error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("expected success, got error: %v", result.Content[0].(mcplib.TextContent).Text)
+		t.Fatalf("unexpected error")
 	}
 
+	// Verify structuredContent.
+	if result.StructuredContent == nil {
+		t.Fatal("expected structuredContent to be set")
+	}
+	match, ok := result.StructuredContent.(libMatch)
+	if !ok {
+		t.Fatalf("structuredContent type = %T, want libMatch", result.StructuredContent)
+	}
+	if match.Name != "spring-boot" {
+		t.Errorf("name = %q, want spring-boot", match.Name)
+	}
+
+	// Verify text fallback.
 	text := result.Content[0].(mcplib.TextContent).Text
-	var match map[string]any
-	if err := json.Unmarshal([]byte(text), &match); err != nil {
-		t.Fatalf("unmarshal result: %v", err)
-	}
-
-	if match["name"] != "spring-boot" {
-		t.Errorf("expected name 'spring-boot', got %q", match["name"])
+	if !strings.Contains(text, "spring-boot") {
+		t.Errorf("text fallback missing spring-boot: %s", text)
 	}
 }
 
@@ -148,11 +140,10 @@ func TestResolveLibraryNotFound(t *testing.T) {
 
 	result, err := h.ResolveLibrary(context.Background(), makeRequest(map[string]any{"query": "nonexistent"}))
 	if err != nil {
-		t.Fatalf("ResolveLibrary error: %v", err)
+		t.Fatalf("error: %v", err)
 	}
-
 	if !result.IsError {
-		t.Fatal("expected IsError=true for not found library")
+		t.Fatal("expected IsError=true")
 	}
 }
 
@@ -166,42 +157,63 @@ func TestGetLibraryDocs(t *testing.T) {
 		"max_tokens": 5000,
 	}))
 	if err != nil {
-		t.Fatalf("GetLibraryDocs error: %v", err)
+		t.Fatalf("error: %v", err)
 	}
 	if result.IsError {
-		t.Fatalf("expected success, got error: %v", result.Content[0].(mcplib.TextContent).Text)
+		t.Fatalf("unexpected error: %v", result.Content[0].(mcplib.TextContent).Text)
 	}
 
+	// get-library-docs returns human-readable text, not JSON.
 	text := result.Content[0].(mcplib.TextContent).Text
-	var resp map[string]any
-	if err := json.Unmarshal([]byte(text), &resp); err != nil {
-		t.Fatalf("unmarshal result: %v", err)
+
+	// Should have a markdown title.
+	if !strings.Contains(text, "# spring-boot") {
+		t.Errorf("expected markdown title, got:\n%s", text[:min(200, len(text))])
 	}
 
-	if resp["library"] != "spring-boot" {
-		t.Errorf("expected library 'spring-boot', got %q", resp["library"])
+	// Should contain the doc content.
+	if !strings.Contains(strings.ToLower(text), "health") {
+		t.Error("expected results to contain 'health'")
 	}
 
-	results, ok := resp["results"].([]any)
-	if !ok || len(results) == 0 {
-		t.Fatal("expected non-empty results")
+	// Should contain breadcrumb as heading.
+	if !strings.Contains(text, "## Spring Boot Actuator") {
+		t.Errorf("expected breadcrumb heading, got:\n%s", text[:min(300, len(text))])
 	}
 
-	// Verify results contain "health"
-	found := false
-	for _, r := range results {
-		entry, ok := r.(map[string]any)
-		if !ok {
-			continue
-		}
-		content, _ := entry["content"].(string)
-		if strings.Contains(strings.ToLower(content), "health") {
-			found = true
-			break
-		}
+	// Should contain source path.
+	if !strings.Contains(text, "docs/actuator.md") {
+		t.Error("expected source path in output")
 	}
-	if !found {
-		t.Error("expected search results to contain 'health'")
+
+	// Should NOT be JSON.
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Error("get-library-docs should return text, not JSON")
+	}
+
+	// structuredContent should NOT be set for docs.
+	if result.StructuredContent != nil {
+		t.Error("get-library-docs should not set structuredContent")
+	}
+}
+
+func TestGetLibraryDocsNoResults(t *testing.T) {
+	store := setupTestStore(t)
+	h := &ToolHandlers{Store: store}
+
+	result, err := h.GetLibraryDocs(context.Background(), makeRequest(map[string]any{
+		"library": "spring-boot",
+		"query":   "xyznonexistent",
+	}))
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if result.IsError {
+		t.Fatal("no-results is not an error, just empty")
+	}
+	text := result.Content[0].(mcplib.TextContent).Text
+	if !strings.Contains(text, "No results") {
+		t.Errorf("expected 'No results' message, got: %s", text)
 	}
 }
 
@@ -214,10 +226,9 @@ func TestGetLibraryDocsNotFound(t *testing.T) {
 		"query":   "something",
 	}))
 	if err != nil {
-		t.Fatalf("GetLibraryDocs error: %v", err)
+		t.Fatalf("error: %v", err)
 	}
-
 	if !result.IsError {
-		t.Fatal("expected IsError=true for not found library")
+		t.Fatal("expected IsError=true")
 	}
 }

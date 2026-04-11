@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 
@@ -15,17 +16,30 @@ type ToolHandlers struct {
 	Store *index.Store
 }
 
-// ListLibraries returns all indexed libraries as a JSON array.
+// structuredResult builds a CallToolResult with both structuredContent (for
+// clients that support it) and a JSON text fallback (for those that don't).
+func structuredResult(v any) (*mcplib.CallToolResult, error) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return nil, fmt.Errorf("marshal: %w", err)
+	}
+	return &mcplib.CallToolResult{
+		Content:           []mcplib.Content{mcplib.TextContent{Type: "text", Text: string(data)}},
+		StructuredContent: v,
+	}, nil
+}
+
+type libEntry struct {
+	Name      string `json:"name"`
+	Ref       string `json:"ref"`
+	FetchedAt string `json:"fetched_at"`
+}
+
+// ListLibraries returns all indexed libraries.
 func (h *ToolHandlers) ListLibraries(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 	libs, err := h.Store.ListLibraries()
 	if err != nil {
 		return mcplib.NewToolResultError(fmt.Sprintf("failed to list libraries: %v", err)), nil
-	}
-
-	type libEntry struct {
-		Name      string `json:"name"`
-		Ref       string `json:"ref"`
-		FetchedAt string `json:"fetched_at"`
 	}
 
 	entries := make([]libEntry, 0, len(libs))
@@ -37,12 +51,16 @@ func (h *ToolHandlers) ListLibraries(ctx context.Context, req mcplib.CallToolReq
 		})
 	}
 
-	data, err := json.Marshal(entries)
+	result, err := structuredResult(entries)
 	if err != nil {
-		return mcplib.NewToolResultError(fmt.Sprintf("failed to encode libraries: %v", err)), nil
+		return mcplib.NewToolResultError(err.Error()), nil
 	}
+	return result, nil
+}
 
-	return mcplib.NewToolResultText(string(data)), nil
+type libMatch struct {
+	Name string `json:"name"`
+	Ref  string `json:"ref"`
 }
 
 // ResolveLibrary finds a library by name query and returns the first match.
@@ -58,25 +76,16 @@ func (h *ToolHandlers) ResolveLibrary(ctx context.Context, req mcplib.CallToolRe
 		return mcplib.NewToolResultError(fmt.Sprintf("no library found matching %q", query)), nil
 	}
 
-	type libMatch struct {
-		Name string `json:"name"`
-		Ref  string `json:"ref"`
-	}
+	match := libMatch{Name: libs[0].Name, Ref: libs[0].Ref}
 
-	match := libMatch{
-		Name: libs[0].Name,
-		Ref:  libs[0].Ref,
-	}
-
-	data, err := json.Marshal(match)
+	result, err := structuredResult(match)
 	if err != nil {
-		return mcplib.NewToolResultError(fmt.Sprintf("failed to encode result: %v", err)), nil
+		return mcplib.NewToolResultError(err.Error()), nil
 	}
-
-	return mcplib.NewToolResultText(string(data)), nil
+	return result, nil
 }
 
-// GetLibraryDocs searches a library's documentation and returns matching chunks.
+// GetLibraryDocs searches a library's documentation and returns human-readable text.
 func (h *ToolHandlers) GetLibraryDocs(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 	library := req.GetString("library", "")
 	query := req.GetString("query", "")
@@ -92,39 +101,22 @@ func (h *ToolHandlers) GetLibraryDocs(ctx context.Context, req mcplib.CallToolRe
 		return mcplib.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
 	}
 
-	type resultEntry struct {
-		Path       string  `json:"path"`
-		Breadcrumb string  `json:"breadcrumb"`
-		Content    string  `json:"content"`
-		Score      float64 `json:"score"`
+	if len(results) == 0 {
+		return mcplib.NewToolResultText(fmt.Sprintf("No results found for %q in %s (%s).", query, lib.Name, lib.Ref)), nil
 	}
 
-	type searchResponse struct {
-		Library string        `json:"library"`
-		Version string        `json:"version"`
-		Results []resultEntry `json:"results"`
+	var b strings.Builder
+	fmt.Fprintf(&b, "# %s (%s) — %d results\n\n", lib.Name, lib.Ref, len(results))
+
+	for i, r := range results {
+		if i > 0 {
+			b.WriteString("\n---\n\n")
+		}
+		fmt.Fprintf(&b, "## %s\n", r.Breadcrumb)
+		fmt.Fprintf(&b, "_Source: %s_\n\n", r.Path)
+		b.WriteString(r.Content)
+		b.WriteByte('\n')
 	}
 
-	entries := make([]resultEntry, 0, len(results))
-	for _, r := range results {
-		entries = append(entries, resultEntry{
-			Path:       r.Path,
-			Breadcrumb: r.Breadcrumb,
-			Content:    r.Content,
-			Score:      r.Score,
-		})
-	}
-
-	resp := searchResponse{
-		Library: lib.Name,
-		Version: lib.Ref,
-		Results: entries,
-	}
-
-	data, err := json.Marshal(resp)
-	if err != nil {
-		return mcplib.NewToolResultError(fmt.Sprintf("failed to encode results: %v", err)), nil
-	}
-
-	return mcplib.NewToolResultText(string(data)), nil
+	return mcplib.NewToolResultText(b.String()), nil
 }
