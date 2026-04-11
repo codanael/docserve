@@ -34,48 +34,62 @@ func NewFetcher(store *index.Store, dataDir string) *Fetcher {
 	return &Fetcher{store: store, dataDir: dataDir}
 }
 
-// FetchSource executes the full fetch pipeline for a single source.
-func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, prov Provider) (*FetchResult, error) {
-	// Step 1: resolve ref → SHA.
-	sha, err := prov.Resolve(ctx, cfg.Ref)
-	if err != nil {
-		return nil, fmt.Errorf("resolve ref %q: %w", cfg.Ref, err)
+// FetchSource executes the full fetch pipeline for a single source+ref.
+func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, ref config.RefConfig, libName string, prov Provider) (*FetchResult, error) {
+	// Determine the reference identifier based on provider type.
+	resolveRef := ref.Ref
+	if cfg.Provider == "confluence" {
+		resolveRef = ref.ID
 	}
-	log.Printf("[%s] resolved ref %q → %s", cfg.Name, cfg.Ref, sha)
+
+	// Step 1: resolve ref → SHA.
+	sha, err := prov.Resolve(ctx, resolveRef)
+	if err != nil {
+		return nil, fmt.Errorf("resolve ref %q: %w", resolveRef, err)
+	}
+	log.Printf("[%s] resolved ref %q → %s", libName, resolveRef, sha)
 
 	// Step 2: check if we already have this SHA indexed (unless Force).
 	if !f.Force {
-		lib, err := f.store.GetLibrary(cfg.Name)
+		lib, err := f.store.GetLibrary(libName)
 		if err == nil && lib.CommitSHA == sha {
-			log.Printf("[%s] already up to date at %s, skipping", cfg.Name, sha)
-			return &FetchResult{Source: cfg.Name, SHA: sha, Updated: false}, nil
+			log.Printf("[%s] already up to date at %s, skipping", libName, sha)
+			return &FetchResult{Source: libName, SHA: sha, Updated: false}, nil
 		}
 	}
 
 	// Step 3: check raw cache.
-	rawDir := filepath.Join(f.dataDir, "raw", cfg.Name, sha)
+	rawDir := filepath.Join(f.dataDir, "raw", libName, sha)
 	if _, err := os.Stat(rawDir); os.IsNotExist(err) {
 		// Step 4: download into rawDir.
-		log.Printf("[%s] fetching %s into %s", cfg.Name, sha, rawDir)
+		log.Printf("[%s] fetching %s into %s", libName, sha, rawDir)
 		if err := os.MkdirAll(rawDir, 0755); err != nil {
 			return nil, fmt.Errorf("create raw dir: %w", err)
 		}
-		if err := prov.Fetch(ctx, sha, cfg.Paths, rawDir); err != nil {
+		paths := ref.Paths
+		if len(paths) == 0 {
+			paths = []string{""}
+		}
+		if err := prov.Fetch(ctx, sha, paths, rawDir); err != nil {
 			os.RemoveAll(rawDir) //nolint:errcheck
-			return nil, fmt.Errorf("fetch source %q: %w", cfg.Name, err)
+			return nil, fmt.Errorf("fetch source %q: %w", libName, err)
 		}
 	} else {
-		log.Printf("[%s] using cached raw files at %s", cfg.Name, rawDir)
+		log.Printf("[%s] using cached raw files at %s", libName, rawDir)
 	}
 
 	// Step 5: walk each path prefix dir and chunk files.
+	paths := ref.Paths
+	if len(paths) == 0 {
+		paths = []string{""}
+	}
 	var chunks []index.Chunk
-	for _, pathPrefix := range cfg.Paths {
+	for _, pathPrefix := range paths {
 		dir := filepath.Join(rawDir, filepath.FromSlash(pathPrefix))
 		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				// Log but skip unreadable entries.
-				log.Printf("[%s] warning: walking %s: %v", cfg.Name, path, err)
+				log.Printf("[%s] warning: walking %s: %v", libName, path, err)
 				return nil
 			}
 			if d.IsDir() {
@@ -84,7 +98,7 @@ func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, prov
 
 			data, err := os.ReadFile(path)
 			if err != nil {
-				log.Printf("[%s] warning: reading %s: %v", cfg.Name, path, err)
+				log.Printf("[%s] warning: reading %s: %v", libName, path, err)
 				return nil
 			}
 
@@ -98,7 +112,7 @@ func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, prov
 			chunker := index.NewChunker(path)
 			fileChunks, err := chunker.Chunk(relSlash, data)
 			if err != nil {
-				log.Printf("[%s] warning: chunking %s: %v", cfg.Name, path, err)
+				log.Printf("[%s] warning: chunking %s: %v", libName, path, err)
 				return nil
 			}
 			chunks = append(chunks, fileChunks...)
@@ -108,20 +122,30 @@ func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, prov
 			return nil, fmt.Errorf("walk %q: %w", dir, err)
 		}
 	}
-	log.Printf("[%s] collected %d chunks", cfg.Name, len(chunks))
+	log.Printf("[%s] collected %d chunks", libName, len(chunks))
 
 	// Build the short ref label (up to 12 chars of sha).
 	shortSHA := sha
 	if len(shortSHA) > 12 {
 		shortSHA = shortSHA[:12]
 	}
-	ref := cfg.Ref + "@" + shortSHA
+	refLabel := ref.Ref
+	if cfg.Provider == "confluence" {
+		refLabel = ref.Space + "/" + ref.ID
+	}
+	refStr := refLabel + "@" + shortSHA
+
+	// Determine repo for the library record.
+	repo := cfg.Repo
+	if cfg.Provider == "confluence" {
+		repo = cfg.BaseURL + "/spaces/" + ref.Space + "/pages/" + ref.ID
+	}
 
 	// Step 6: upsert library then replace chunks.
 	lib := index.Library{
-		Name:      cfg.Name,
-		Repo:      cfg.Repo,
-		Ref:       ref,
+		Name:      libName,
+		Repo:      repo,
+		Ref:       refStr,
 		CommitSHA: sha,
 		FetchedAt: time.Now().UTC(),
 	}
@@ -132,11 +156,11 @@ func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, prov
 	if err := f.store.ReplaceChunks(libID, chunks); err != nil {
 		return nil, fmt.Errorf("replace chunks: %w", err)
 	}
-	log.Printf("[%s] indexed %d chunks (libID=%d)", cfg.Name, len(chunks), libID)
+	log.Printf("[%s] indexed %d chunks (libID=%d)", libName, len(chunks), libID)
 
 	// Step 7: return result.
 	return &FetchResult{
-		Source:     cfg.Name,
+		Source:     libName,
 		SHA:        sha,
 		Updated:    true,
 		ChunkCount: len(chunks),

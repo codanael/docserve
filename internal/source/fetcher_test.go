@@ -46,13 +46,19 @@ func setupStore(t *testing.T) (*index.Store, string) {
 }
 
 // sourceCfg builds a minimal SourceConfig for tests.
-func sourceCfg(name string, paths []string) config.SourceConfig {
+func sourceCfg(name string) config.SourceConfig {
 	return config.SourceConfig{
 		Name:     name,
 		Provider: "github",
 		Repo:     "owner/repo",
-		Ref:      "main",
-		Paths:    paths,
+	}
+}
+
+// refCfg builds a minimal RefConfig for tests.
+func refCfg(ref string, paths []string) config.RefConfig {
+	return config.RefConfig{
+		Ref:   ref,
+		Paths: paths,
 	}
 }
 
@@ -71,11 +77,13 @@ func TestFetchPipeline(t *testing.T) {
 			"docs/index.md": "# Hello\n\nThis is the first version of the documentation.",
 		},
 	}
-	cfg := sourceCfg("mylib", []string{"docs"})
+	cfg := sourceCfg("mylib")
+	ref := refCfg("main", []string{"docs"})
+	libName := config.LibraryName(cfg, ref)
 	ctx := context.Background()
 
 	// --- First fetch: should index and return Updated=true ---
-	result, err := fetcher.FetchSource(ctx, cfg, prov)
+	result, err := fetcher.FetchSource(ctx, cfg, ref, libName, prov)
 	if err != nil {
 		t.Fatalf("first FetchSource: %v", err)
 	}
@@ -88,12 +96,12 @@ func TestFetchPipeline(t *testing.T) {
 	if result.ChunkCount == 0 {
 		t.Error("first fetch: want ChunkCount>0, got 0")
 	}
-	if result.Source != cfg.Name {
-		t.Errorf("first fetch: want Source=%q, got %q", cfg.Name, result.Source)
+	if result.Source != libName {
+		t.Errorf("first fetch: want Source=%q, got %q", libName, result.Source)
 	}
 
 	// --- Second fetch with same SHA: should be a no-op ---
-	result2, err := fetcher.FetchSource(ctx, cfg, prov)
+	result2, err := fetcher.FetchSource(ctx, cfg, ref, libName, prov)
 	if err != nil {
 		t.Fatalf("second FetchSource: %v", err)
 	}
@@ -110,7 +118,7 @@ func TestFetchPipeline(t *testing.T) {
 		"docs/index.md": "# Hello\n\nThis is the UPDATED documentation with unique_token_xyz.",
 	}
 
-	result3, err := fetcher.FetchSource(ctx, cfg, prov)
+	result3, err := fetcher.FetchSource(ctx, cfg, ref, libName, prov)
 	if err != nil {
 		t.Fatalf("third FetchSource: %v", err)
 	}
@@ -122,7 +130,7 @@ func TestFetchPipeline(t *testing.T) {
 	}
 
 	// Verify the updated content is findable via search.
-	lib, err := store.GetLibrary(cfg.Name)
+	lib, err := store.GetLibrary(libName)
 	if err != nil {
 		t.Fatalf("GetLibrary: %v", err)
 	}
@@ -148,11 +156,13 @@ func TestFetchPipelineForce(t *testing.T) {
 			"docs/guide.md": "# Guide\n\nForced content.",
 		},
 	}
-	cfg := sourceCfg("forcelib", []string{"docs"})
+	cfg := sourceCfg("forcelib")
+	ref := refCfg("main", []string{"docs"})
+	libName := config.LibraryName(cfg, ref)
 	ctx := context.Background()
 
 	// First fetch.
-	result, err := fetcher.FetchSource(ctx, cfg, prov)
+	result, err := fetcher.FetchSource(ctx, cfg, ref, libName, prov)
 	if err != nil {
 		t.Fatalf("first FetchSource (force): %v", err)
 	}
@@ -161,7 +171,7 @@ func TestFetchPipelineForce(t *testing.T) {
 	}
 
 	// Second fetch with same SHA but Force=true → must still update.
-	result2, err := fetcher.FetchSource(ctx, cfg, prov)
+	result2, err := fetcher.FetchSource(ctx, cfg, ref, libName, prov)
 	if err != nil {
 		t.Fatalf("second FetchSource (force): %v", err)
 	}

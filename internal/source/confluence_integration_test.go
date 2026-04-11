@@ -121,18 +121,21 @@ func TestConfluenceIntegration(t *testing.T) {
 		Name:     "test-confluence",
 		Provider: "confluence",
 		BaseURL:  srv.URL,
-		Ref:      "100",
-		Paths:    []string{""},
 	}
+	ref := config.RefConfig{
+		Space: "TEST",
+		ID:    "100",
+	}
+	libName := config.LibraryName(cfg, ref)
 
-	prov := source.NewConfluenceProvider(cfg, srv.Client())
+	prov := source.NewConfluenceProvider(cfg, ref, srv.Client())
 
 	ctx := context.Background()
 
 	// ---------------------------------------------------------------
 	// 3. First fetch: should update
 	// ---------------------------------------------------------------
-	result, err := fetcher.FetchSource(ctx, cfg, prov)
+	result, err := fetcher.FetchSource(ctx, cfg, ref, libName, prov)
 	if err != nil {
 		t.Fatalf("FetchSource (1st): %v", err)
 	}
@@ -147,7 +150,7 @@ func TestConfluenceIntegration(t *testing.T) {
 	// ---------------------------------------------------------------
 	// 4. Verify library stored
 	// ---------------------------------------------------------------
-	lib, err := store.GetLibrary("test-confluence")
+	lib, err := store.GetLibrary(libName)
 	if err != nil {
 		t.Fatalf("GetLibrary: %v", err)
 	}
@@ -185,7 +188,7 @@ func TestConfluenceIntegration(t *testing.T) {
 	// ---------------------------------------------------------------
 	// 7. Second fetch: should be a cache hit (Updated=false)
 	// ---------------------------------------------------------------
-	result2, err := fetcher.FetchSource(ctx, cfg, prov)
+	result2, err := fetcher.FetchSource(ctx, cfg, ref, libName, prov)
 	if err != nil {
 		t.Fatalf("FetchSource (2nd): %v", err)
 	}
