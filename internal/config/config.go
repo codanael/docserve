@@ -21,36 +21,42 @@ type ProxyConfig struct {
 	HTTPS string `yaml:"https"`
 }
 
+// RefConfig describes a single ref (branch/tag/space) within a source.
+type RefConfig struct {
+	Name  string   `yaml:"name"`
+	Ref   string   `yaml:"ref"`
+	Paths []string `yaml:"paths"`
+	Space string   `yaml:"space"`
+	ID    string   `yaml:"id"`
+	Depth *int     `yaml:"depth"`
+}
+
 // SourceConfig describes a documentation source.
 type SourceConfig struct {
-	Name     string     `yaml:"name"`
-	Provider string     `yaml:"provider"`
-	Repo     string     `yaml:"repo"`
-	Org      string     `yaml:"org"`      // Azure DevOps
-	Project  string     `yaml:"project"`  // Azure DevOps
-	BaseURL  string     `yaml:"base_url"`
-	Ref      string     `yaml:"ref"`
-	Depth    *int       `yaml:"depth"`
-	Proxy    bool       // defaults to true; handled via custom UnmarshalYAML
-	Paths    []string   `yaml:"paths"`
-	Schedule string     `yaml:"schedule"`
-	Auth     AuthConfig `yaml:"auth"`
+	Name     string      `yaml:"name"`
+	Provider string      `yaml:"provider"`
+	Repo     string      `yaml:"repo"`
+	Org      string      `yaml:"org"`      // Azure DevOps
+	Project  string      `yaml:"project"`  // Azure DevOps
+	BaseURL  string      `yaml:"base_url"`
+	Refs     []RefConfig `yaml:"refs"`
+	Proxy    bool        // defaults to true; handled via custom UnmarshalYAML
+	Schedule string      `yaml:"schedule"`
+	Auth     AuthConfig  `yaml:"auth"`
 }
 
 // rawSource mirrors SourceConfig but uses *bool for Proxy to detect absence.
 type rawSource struct {
-	Name     string     `yaml:"name"`
-	Provider string     `yaml:"provider"`
-	Repo     string     `yaml:"repo"`
-	Org      string     `yaml:"org"`
-	Project  string     `yaml:"project"`
-	BaseURL  string     `yaml:"base_url"`
-	Ref      string     `yaml:"ref"`
-	Depth    *int       `yaml:"depth"`
-	Proxy    *bool      `yaml:"proxy"`
-	Paths    []string   `yaml:"paths"`
-	Schedule string     `yaml:"schedule"`
-	Auth     AuthConfig `yaml:"auth"`
+	Name     string      `yaml:"name"`
+	Provider string      `yaml:"provider"`
+	Repo     string      `yaml:"repo"`
+	Org      string      `yaml:"org"`
+	Project  string      `yaml:"project"`
+	BaseURL  string      `yaml:"base_url"`
+	Refs     []RefConfig `yaml:"refs"`
+	Proxy    *bool       `yaml:"proxy"`
+	Schedule string      `yaml:"schedule"`
+	Auth     AuthConfig  `yaml:"auth"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler so that Proxy defaults to true.
@@ -66,9 +72,7 @@ func (s *SourceConfig) UnmarshalYAML(value *yaml.Node) error {
 	s.Org = raw.Org
 	s.Project = raw.Project
 	s.BaseURL = raw.BaseURL
-	s.Ref = raw.Ref
-	s.Depth = raw.Depth
-	s.Paths = raw.Paths
+	s.Refs = raw.Refs
 	s.Schedule = raw.Schedule
 	s.Auth = raw.Auth
 
@@ -87,6 +91,24 @@ type AuthConfig struct {
 	TokenEnv    string `yaml:"token_env"`
 	UsernameEnv string `yaml:"username_env"`
 	PasswordEnv string `yaml:"password_env"`
+}
+
+// LibraryName returns the library name for a given source and ref.
+// If the ref has a custom name, it is returned; otherwise a default is generated.
+func LibraryName(src SourceConfig, ref RefConfig) string {
+	if ref.Name != "" {
+		return ref.Name
+	}
+	return defaultLibraryName(src, ref)
+}
+
+func defaultLibraryName(src SourceConfig, ref RefConfig) string {
+	switch src.Provider {
+	case "confluence":
+		return src.Name + "/" + ref.Space + "/" + ref.ID
+	default:
+		return src.Name + "/" + ref.Ref
+	}
 }
 
 // Load reads the YAML config at path, applies defaults, and validates it.
@@ -122,6 +144,8 @@ func validate(cfg *Config) error {
 		return fmt.Errorf("config must have at least one source")
 	}
 
+	seen := make(map[string]bool)
+
 	for i, src := range cfg.Sources {
 		if src.Name == "" {
 			return fmt.Errorf("source[%d]: name is required", i)
@@ -129,26 +153,44 @@ func validate(cfg *Config) error {
 		if src.Provider == "" {
 			return fmt.Errorf("source %q: provider is required", src.Name)
 		}
+
 		switch src.Provider {
 		case "github", "azure-devops":
-			if src.Ref == "" {
-				return fmt.Errorf("source %q: ref is required", src.Name)
+			if len(src.Refs) == 0 {
+				return fmt.Errorf("source %q: refs must have at least one entry", src.Name)
 			}
-			if len(src.Paths) == 0 {
-				return fmt.Errorf("source %q: at least one path is required", src.Name)
+			for j, ref := range src.Refs {
+				if ref.Ref == "" {
+					return fmt.Errorf("source %q: refs[%d]: ref is required", src.Name, j)
+				}
+				if len(ref.Paths) == 0 {
+					return fmt.Errorf("source %q: refs[%d]: at least one path is required", src.Name, j)
+				}
+				libName := LibraryName(src, ref)
+				if seen[libName] {
+					return fmt.Errorf("duplicate library name %q", libName)
+				}
+				seen[libName] = true
 			}
 		case "confluence":
 			if src.BaseURL == "" {
 				return fmt.Errorf("source %q: base_url is required for confluence provider", src.Name)
 			}
-			if src.Ref == "" {
-				return fmt.Errorf("source %q: ref is required", src.Name)
+			if len(src.Refs) == 0 {
+				return fmt.Errorf("source %q: refs must have at least one entry", src.Name)
 			}
-			if len(src.Paths) == 0 {
-				cfg.Sources[i].Paths = []string{""}
-			}
-			if src.Repo == "" {
-				cfg.Sources[i].Repo = src.BaseURL + "/pages/" + src.Ref
+			for j, ref := range src.Refs {
+				if ref.Space == "" {
+					return fmt.Errorf("source %q: refs[%d]: space is required for confluence provider", src.Name, j)
+				}
+				if ref.ID == "" {
+					return fmt.Errorf("source %q: refs[%d]: id is required for confluence provider", src.Name, j)
+				}
+				libName := LibraryName(src, ref)
+				if seen[libName] {
+					return fmt.Errorf("duplicate library name %q", libName)
+				}
+				seen[libName] = true
 			}
 		default:
 			return fmt.Errorf("source %q: unknown provider %q (must be github, azure-devops, or confluence)", src.Name, src.Provider)
