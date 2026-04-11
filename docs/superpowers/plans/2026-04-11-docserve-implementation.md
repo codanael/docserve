@@ -52,7 +52,7 @@
 
 ```bash
 cd /home/agent/projects/mcp-docs
-go mod init github.com/user/docserve
+go mod init github.com/codanael/docserve
 ```
 
 - [ ] **Step 2: Create minimal main.go**
@@ -1923,7 +1923,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/user/docserve/internal/config"
+	"github.com/codanael/docserve/internal/config"
 )
 
 func TestGitHubResolve(t *testing.T) {
@@ -2078,7 +2078,7 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/user/docserve/internal/config"
+	"github.com/codanael/docserve/internal/config"
 )
 
 type Provider interface {
@@ -2157,7 +2157,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/user/docserve/internal/config"
+	"github.com/codanael/docserve/internal/config"
 )
 
 const defaultGitHubAPI = "https://api.github.com"
@@ -2381,7 +2381,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/user/docserve/internal/config"
+	"github.com/codanael/docserve/internal/config"
 )
 
 func TestAzureDevOpsResolve(t *testing.T) {
@@ -2523,7 +2523,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/user/docserve/internal/config"
+	"github.com/codanael/docserve/internal/config"
 )
 
 const defaultAzureDevOpsURL = "https://dev.azure.com"
@@ -2687,8 +2687,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/user/docserve/internal/config"
-	"github.com/user/docserve/internal/index"
+	"github.com/codanael/docserve/internal/config"
+	"github.com/codanael/docserve/internal/index"
 )
 
 // fakeProvider implements Provider for testing the fetch pipeline.
@@ -2839,8 +2839,8 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/user/docserve/internal/config"
-	"github.com/user/docserve/internal/index"
+	"github.com/codanael/docserve/internal/config"
+	"github.com/codanael/docserve/internal/index"
 )
 
 type FetchResult struct {
@@ -3205,7 +3205,7 @@ import (
 	"time"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
-	"github.com/user/docserve/internal/index"
+	"github.com/codanael/docserve/internal/index"
 )
 
 func setupTestStore(t *testing.T) *index.Store {
@@ -3363,7 +3363,7 @@ import (
 	"fmt"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
-	"github.com/user/docserve/internal/index"
+	"github.com/codanael/docserve/internal/index"
 )
 
 type ToolHandlers struct {
@@ -3528,7 +3528,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/user/docserve/internal/index"
+	"github.com/codanael/docserve/internal/index"
 )
 
 func TestMCPServerHealthz(t *testing.T) {
@@ -3652,7 +3652,7 @@ import (
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/user/docserve/internal/index"
+	"github.com/codanael/docserve/internal/index"
 )
 
 type Server struct {
@@ -3771,10 +3771,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/user/docserve/internal/config"
-	"github.com/user/docserve/internal/index"
-	mcpsrv "github.com/user/docserve/internal/mcp"
-	"github.com/user/docserve/internal/source"
+	"github.com/codanael/docserve/internal/config"
+	"github.com/codanael/docserve/internal/index"
+	mcpsrv "github.com/codanael/docserve/internal/mcp"
+	"github.com/codanael/docserve/internal/source"
 )
 
 var version = "dev"
@@ -4427,8 +4427,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/user/docserve/internal/index"
-	mcpsrv "github.com/user/docserve/internal/mcp"
+	"github.com/codanael/docserve/internal/index"
+	mcpsrv "github.com/codanael/docserve/internal/mcp"
 )
 
 func TestMCPProtocolFlow(t *testing.T) {
@@ -4692,7 +4692,7 @@ func cmdServe(args []string) {
 
 Add the import for the scheduler package:
 ```go
-"github.com/user/docserve/internal/scheduler"
+"github.com/codanael/docserve/internal/scheduler"
 ```
 
 - [ ] **Step 2: Verify build**
