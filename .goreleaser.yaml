@@ -26,34 +26,39 @@ checksum:
   name_template: "checksums.txt"
 
 signs:
-  - artifacts: checksum
-    cmd: cosign
+  - cmd: cosign
+    artifacts: checksum
+    signature: "${artifact}.sigstore.json"
     args:
       - "sign-blob"
-      - "--yes"
-      - "--output-signature=${signature}"
+      - "--bundle=${signature}"
       - "${artifact}"
+      - "--yes"
+    output: true
 
-dockers:
-  - image_templates:
-      - "ghcr.io/codanael/docserve:{{ .Version }}-amd64"
+dockers_v2:
+  - id: docserve
     dockerfile: Dockerfile
-    build_flag_templates:
-      - "--platform=linux/amd64"
-    goarch: amd64
-  - image_templates:
-      - "ghcr.io/codanael/docserve:{{ .Version }}-arm64"
-    dockerfile: Dockerfile
-    build_flag_templates:
-      - "--platform=linux/arm64"
-    goarch: arm64
+    images:
+      - "ghcr.io/codanael/docserve"
+    tags:
+      - "v{{ .Version }}"
+      - "{{ if not .IsSnapshot }}latest{{ end }}"
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    ids:
+      - docserve
+    labels:
+      "org.opencontainers.image.source": "https://github.com/codanael/docserve"
+      "org.opencontainers.image.description": "MCP documentation server"
+      "org.opencontainers.image.version": "{{ .Version }}"
 
-docker_manifests:
-  - name_template: "ghcr.io/codanael/docserve:{{ .Version }}"
-    image_templates:
-      - "ghcr.io/codanael/docserve:{{ .Version }}-amd64"
-      - "ghcr.io/codanael/docserve:{{ .Version }}-arm64"
-  - name_template: "ghcr.io/codanael/docserve:latest"
-    image_templates:
-      - "ghcr.io/codanael/docserve:{{ .Version }}-amd64"
-      - "ghcr.io/codanael/docserve:{{ .Version }}-arm64"
+docker_signs:
+  - cmd: cosign
+    artifacts: all
+    args:
+      - "sign"
+      - "${artifact}@${digest}"
+      - "--yes"
+    output: true
