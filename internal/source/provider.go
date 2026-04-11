@@ -43,15 +43,19 @@ func (t *authTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	case "basic":
 		username := os.Getenv(t.auth.UsernameEnv)
 		password := os.Getenv(t.auth.PasswordEnv)
-		cred := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
-		r.Header.Set("Authorization", "Basic "+cred)
+		if username != "" && password != "" {
+			cred := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+			r.Header.Set("Authorization", "Basic "+cred)
+		}
 	case "bearer":
-		token := os.Getenv(t.auth.TokenEnv)
-		r.Header.Set("Authorization", "Bearer "+token)
+		if token := os.Getenv(t.auth.TokenEnv); token != "" {
+			r.Header.Set("Authorization", "Bearer "+token)
+		}
 	default:
 		// GitHub-style token auth (type is empty or unrecognised).
-		token := os.Getenv(t.auth.TokenEnv)
-		r.Header.Set("Authorization", "token "+token)
+		if token := os.Getenv(t.auth.TokenEnv); token != "" {
+			r.Header.Set("Authorization", "token "+token)
+		}
 	}
 
 	return t.base.RoundTrip(r)
