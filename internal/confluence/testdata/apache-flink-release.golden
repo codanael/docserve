@@ -1,0 +1,474 @@
+[https://repository.apache.org/#welcome](https://repository.apache.org/#welcome)
+
+> **Info:** This is based on the release guide of the Apache Beam project: [https://beam.apache.org/contribute/release-guide/](https://beam.apache.org/contribute/release-guide/)
+
+## Introduction
+
+The Apache Flink project periodically declares and publishes releases. A release is one or more packages of the project artifact(s) that are approved for general public distribution and use. They may come with various degrees of caveat regarding their perceived quality and potential for change, such as “alpha”, “beta”, “incubating”, “stable”, etc.
+
+The Flink community treats releases with great importance. They are a public face of the project and most users interact with the project only through the releases. Releases are signed off by the entire Flink community in a public vote.
+
+Each release is executed by a *Release Manager*, who is selected/proposed by the [Flink PMC members](http://flink.apache.org/community.html#people). This document describes the process that the Release Manager follows to perform a release. Any changes to this process should be discussed and adopted on the [dev@ mailing list](http://flink.apache.org/community.html#mailing-lists).
+
+Please remember that publishing software has legal consequences. This guide complements the foundation-wide [Product Release Policy](http://www.apache.org/dev/release.html) and [Release Distribution Policy](http://www.apache.org/dev/release-distribution).
+
+## Overview
+
+![release-guide-1.png](release-guide-1.png)
+
+The release process consists of several steps:
+
+1. Decide to release
+2. Prepare for the release
+3. Build a release candidate
+4. Vote on the release candidate
+5. If necessary, fix any issues and go back to step 3.
+6. Finalize the release
+7. Promote the release
+
+## Decide to release
+
+Deciding to release and selecting a Release Manager is the first step of the release process. This is a consensus-based decision of the entire community.
+
+Anybody can propose a release on the dev@ mailing list, giving a solid argument and nominating a committer as the Release Manager (including themselves). There’s no formal process, no vote requirements, and no timing requirements. Any objections should be resolved by consensus before starting the release.
+
+In general, the community prefers to have a rotating set of 3-5 Release Managers. Keeping a small core set of managers allows enough people to build expertise in this area and improve processes over time, without Release Managers needing to re-learn the processes for each release. That said, if you are a committer interested in serving the community in this way, please reach out to the community on the dev@ mailing list.
+
+### Checklist to proceed to the next step
+
+1. Community agrees to release
+2. Community selects a Release Manager
+
+## Prepare for the release
+
+Before your first release, you should perform one-time configuration steps. This will set up your security keys for signing the release and access to various release repositories.
+
+To prepare for each release, you should audit the project status in the JIRA issue tracker, and do necessary bookkeeping. Finally, you should create a release branch from which individual release candidates will be built.
+
+### One-time setup instructions
+
+#### GPG Key
+
+You need to have a GPG key to sign the release artifacts. Please be aware of the ASF-wide [release signing guidelines](https://www.apache.org/dev/release-signing.html). If you don’t have a GPG key associated with your Apache account, please create one according to the guidelines.
+
+Determine your Apache GPG Key and Key ID, as follows:
+
+```bash
+gpg --list-keys
+```
+
+```
+This will list your GPG keys. One of these should reflect your Apache account, for example:
+```
+
+```bash
+-------------------------------------------------- pub 2048R/845E6689 2016-02-23 uid Nomen Nescio <anonymous@apache.org> sub 2048R/BA4D50BE 2016-02-23
+```
+
+Here, the key ID is the 8-digit hex string in the `pub` line: `845E6689`.
+
+Now, add your Apache GPG key to the Flink’s `KEYS` file in the [`release`](https://dist.apache.org/repos/dist/release/flink/KEYS) repository at `dist.apache.org`. Follow the instructions listed at the top of these files. (Note: Only PMC members have write access to the release repository. If you end up getting 403 errors ask on the mailing list for assistance.) PMC member can refer following scripts to add your Apache GPG key to the KEYS in the release repository.
+
+```bash
+svn co https://dist.apache.org/repos/dist/release/flink flink-dist-release-repo cd flink-dist-release-repo (gpg --list-sigs <YOUR_KEY_ID> && gpg --armor --export <YOUR_KEY_ID>) >> KEYS svn ci -m "[flink] Add <YOUR_NAME>'s public key"
+```
+
+Configure `git` to use this key when signing code by giving it your key ID, as follows:
+
+```bash
+git config --global user.signingkey 845E6689
+```
+
+You may drop the `--global` option if you’d prefer to use this key for the current repository only.
+
+You may wish to start `gpg-agent` to unlock your GPG key only once using your passphrase. Otherwise, you may need to enter this passphrase hundreds of times. The setup for `gpg-agent` varies based on operating system, but may be something like this:
+
+```bash
+eval $(gpg-agent --daemon --no-grab --write-env-file $HOME/.gpg-agent-info) export GPG_TTY=$(tty) export GPG_AGENT_INFO
+```
+
+#### Access to Apache Nexus repository
+
+Configure access to the [Apache Nexus repository](https://repository.apache.org/), which enables final deployment of releases to the Maven Central Repository.
+
+1. You log in with your Apache account.
+2. Confirm you have appropriate access by finding `org.apache.flink` under `Staging Profiles`.
+3. Navigate to your `Profile` (top right dropdown menu of the page).
+4. Choose `User Token` from the dropdown, then click `Access User Token`. Copy a snippet of the Maven XML configuration block.
+5. Insert this snippet twice into your global Maven `settings.xml` file, typically `${HOME}/.m2/settings.xml`. The end result should look like this, where `TOKEN_NAME` and `TOKEN_PASSWORD`are your secret tokens:
+   
+   ```xml
+   <settings> <servers> <server> <id>apache.releases.https</id> <username>TOKEN_NAME</username> <password>TOKEN_PASSWORD</password> </server> <server> <id>apache.snapshots.https</id> <username>TOKEN_NAME</username> <password>TOKEN_PASSWORD</password> </server> </servers> </settings>
+   ```
+
+#### Website development setup
+
+Get ready for updating the Flink website by following the [website development instructions](https://flink.apache.org/contributing/improve-website.html).
+
+### Create a new version in JIRA
+
+When contributors resolve an issue in JIRA, they are tagging it with a release that will contain their changes. With the release currently underway, new issues should be resolved against a subsequent future release. Therefore, you should create a release item for this subsequent release, as follows:
+
+1. In JIRA, navigate to the [Flink`> Administration > Versions`](https://issues.apache.org/jira/plugins/servlet/project-config/FLINK/versions).
+2. Add a new release: choose the next minor version number compared to the one currently underway, select today’s date as the `Start Date`, and choose `Add`.
+
+### Triage release-blocking issues in JIRA
+
+There could be outstanding release-blocking issues, which should be triaged before proceeding to build a release candidate. We track them by assigning a specific `Fix version` field even before the issue resolved.
+
+The list of release-blocking issues is available at the [version status page](https://issues.apache.org/jira/browse/FLINK/?selectedTab=com.atlassian.jira.jira-projects-plugin%3Aversions-panel). Triage each unresolved issue with one of the following resolutions:
+
+- If the issue has been resolved and JIRA was not updated, resolve it accordingly.
+- If the issue has not been resolved and it is acceptable to defer this until the next release, update the `Fix Version` field to the new version you just created. Please consider discussing this with stakeholders and the dev@ mailing list, as appropriate.
+- If the issue has not been resolved and it is not acceptable to release until it is fixed, the release cannot proceed. Instead, work with the Flink community to resolve the issue.
+
+### Review Release Notes in JIRA
+
+JIRA automatically generates Release Notes based on the `Fix Version` field applied to issues. Release Notes are intended fo users (not Flink committers/contributors). You should ensure that Release Notes are informative and useful.
+
+Open the release notes from the [version status page](https://issues.apache.org/jira/browse/FLINK/?selectedTab=com.atlassian.jira.jira-projects-plugin%3Aversions-panel) by choosing the release underway and clicking Release Notes.
+
+You should verify that the issues listed automatically by JIRA are appropriate to appear in the Release Notes. Specifically, issues should:
+
+- Be appropriately classified as `Bug`, `New Feature`, `Improvement`, etc.
+- Represent noteworthy user-facing changes, such as new functionality, backward-incompatible API changes, or performance improvements.
+- Have occurred since the previous release; an issue that was introduced and fixed between releases should not appear in the Release Notes.
+- Have an issue title that makes sense when read on its own.
+
+Adjust any of the above properties to the improve clarity and presentation of the Release Notes.
+
+Ensure that the JIRA release notes are also included in the release notes of the documentation (see section "Review and update documentation").
+
+### Verify that a Release Build Works
+
+Run `mvn -Papache-release clean install` to ensure that the build processes that are specific to that profile are in good shape.
+
+### Create a release branch
+
+Release candidates are built from a release branch. As a final step in preparation for the release, you should create the release branch, push it to the code repository (you should probably do this once the whole process is done), and update version information on the original branch.
+
+Set up a few environment variables to simplify Maven commands that follow. (We use `bash` Unix syntax in this guide.)
+
+```bash
+RELEASE_VERSION="3.1.0" SHORT_RELEASE_VERSION="3.1" CURRENT_SNAPSHOT_VERSION="$SHORT_RELEASE_VERSION-SNAPSHOT" NEXT_SNAPSHOT_VERSION="3.2-SNAPSHOT" SHORT_NEXT_SNAPSHOT_VERSION="3.2"
+```
+
+If you are doing a new major/minor release (e.g. 2.0.0, 2.1.0), check out the version of the codebase from which you start the release. This may be `HEAD` of the `master` branch. Create a branch for the new version that we want to release before updating the master branch to the next development version:
+
+```bash
+$ git checkout master $ RELEASE_VERSION=$SHORT_RELEASE_VERSION tools/releasing/create_release_branch.sh $ git checkout master # Update revision properties to $NEXT_SNAPSHOT_VERSION in pom.xml and add a commit $ git checkout release-$SHORT_RELEASE_VERSION
+```
+
+If you're creating a new bugfix release (e.g. 2.0.5), you will skip the above step and simply check out the the already existing branch for that version:
+
+```bash
+$ git checkout release-$SHORT_RELEASE_VERSION
+```
+
+If this is a major release, the newly created branch needs to be pushed to the official repository.
+
+Next, for major releases, some configuration for our documentation builds needs to be manually updated, in the `docs/config.toml` file:, as listed below.
+
+```bash
+baseURL = '//nightlies.apache.org/flink/flink-cdc-docs-release-$SHORT_RELEASE_VERSION' IsStable = true Version = "$RELEASE_VERSION" VersionTitle = "$SHORT_RELEASE_VERSION" Branch = "release-$SHORT_RELEASE_VERSION" MenuLinks = [ ["Project Homepage", "//flink.apache.org"], ["JavaDocs", "//nightlies.apache.org/flink/flink-cdc-docs-release-$SHORT_RELEASE_VERSION/api/java/"], ]
+```
+
+After updating the docs configuration and pushing the new major release branch, as the last step you should also update the documentation build bot to also build the documentation for the new release branch. Check [Managing Documentation](Managing Documentation) on details on how to do that. You may also want to manually trigger a build to make the changes visible as soon as possible.
+
+For major/minor releases add a link to the release documentation in `docs/config.toml` in the master branch.
+
+```bash
+$ git checkout master
+```
+
+```bash
+PreviousDocs = [ ["$SHORT_RELEASE_VERSION", "https://nightlies.apache.org/flink/flink-cdc-docs-release-$SHORT_RELEASE_VERSION"], ["3.1", "https://nightlies.apache.org/flink/flink-cdc-docs-release-3.1"], ]
+```
+
+The rest of this guide assumes that commands are run in the root of a repository on the branch of the release version with the above environment variables set.
+
+### Checklist to proceed to the next step
+
+01. Release Manager’s GPG key is published to `dist.apache.org`
+02. Release Manager’s GPG key is configured in `git` configuration
+03. Release Manager has `org.apache.flink` listed under `Staging Profiles` in Nexus
+04. Release Manager’s Nexus User Token is configured in `settings.xml`
+05. JIRA release item for the subsequent release has been created
+06. There are no release blocking JIRA issues
+07. Release Notes in JIRA have been audited and adjusted
+08. Release branch has been created and pushed if it is a major release.
+09. Originating branch has the version information updated to the new version
+10. (major/minor only) Jenkins deployment updated to create snapshot artifacts for release branch (see [here](Snapshots))
+11. `docs/config.toml` has been updated appropriately.
+12. The new documentation for major releases do not contain "-SNAPSHOT" in its version title, and all links refer to the corresponding version docs instead of master.
+
+## Build a release candidate
+
+The core of the release process is the build-vote-fix cycle. Each cycle produces one release candidate. The Release Manager repeats this cycle until the community approves one release candidate, which is then finalized.
+
+### Build and stage Java and Python artifacts
+
+Set up a few environment variables to simplify Maven commands that follow. This identifies the release candidate being built. Start with `RC_NUM` equal to `1` and increment it for each candidate.
+
+```bash
+RC_NUM="1" TAG="release-${RELEASE_VERSION}-rc${RC_NUM}"
+```
+
+We now need to do several things:
+
+- Create the source release archive
+- Deploy jar artifacts to the [Apache Nexus Repository](https://repository.apache.org/), which is the staging area for deploying the jars to Maven Central
+
+First, we build the source release:
+
+```bash
+$ RELEASE_VERSION=$RELEASE_VERSION RELEASE_CANDIDATE=$RC_NUM tools/releasing/create_release_branch.sh $ OLD_VERSION=$CURRENT_SNAPSHOT_VERSION NEW_VERSION=$RELEASE_VERSION tools/releasing/update_branch_version.sh $ git add . && git commit --amend $ RELEASE_VERSION=$RELEASE_VERSION tools/releasing/create_source_release.sh
+```
+
+You will be able to find the built source and release artifacts under the "release/" folder created under the project root directory.
+
+The following steps need to be repeated for each Flink version to be released:
+
+1. Stage the maven artifacts:
+
+```bash
+$ FLINK_VERSION=1.20 $ RELEASE_VERSION=${RELEASE_VERSION} FLINK_VERSION=${FLINK_VERSION} ./tools/releasing/deploy_staging_jars.sh
+```
+
+2\. Copy and sign the binary release tarball:
+
+```bash
+$ cp flink-cdc-dist/target/flink-cdc-${RELEASE_VERSION}-bin.tar.gz release $ cd release $ gpg --armor --detach-sig flink-cdc-${RELEASE_VERSION}-bin.tar.gz $ sha512sum flink-cdc-${RELEASE_VERSION}-bin.tar.gz > flink-cdc-${RELEASE_VERSION}-bin.tar.gz.sha512
+```
+
+Review all staged artifacts ([https://repository.apache.org/](https://repository.apache.org/)). They should contain all relevant parts for each module, including `pom.xml`, jar, test jar, source, test source, javadoc, etc. Carefully review any new artifacts.
+
+Close the staging repository on Apache Nexus. When prompted for a description, enter “Apache Flink CDC, version X, release candidate Y”.
+
+### Stage source and binary releases on [dist.apache.org](http://dist.apache.org)
+
+Copy the source release to the dev repository of `dist.apache.org`.
+
+1. If you have not already, check out the Flink section of the `dev` repository on `dist.apache.org` via Subversion. In a fresh directory:
+   
+   ```bash
+   svn checkout https://dist.apache.org/repos/dist/dev/flink --depth=immediates
+   ```
+2. Make a directory for the new release:
+   
+   ```bash
+   mkdir flink/flink-cdc-${RELEASE_VERSION}-rc${RC_NUM}
+   ```
+   
+   ```
+   Copy all release distributions, hashes, and GPG signature:
+   ```
+   
+   ```
+   mv <flink-cdc-dir>/release/* flink/flink-cdc-${RELEASE_VERSION}-rc${RC_NUM}
+   ```
+3. Add and commit all the files.
+   
+   ```bash
+   cd flink svn add flink-cdc-${RELEASE_VERSION}-rc${RC_NUM} svn commit -m "Apache Flink CDC, version ${RELEASE_VERSION}, release candidate ${RC_NUM}"
+   ```
+4. Verify that files are [present](https://dist.apache.org/repos/dist/dev/flink)
+
+### Push tag of the release to GitHub
+
+```bash
+$ git tag -s ${TAG} -m "${TAG}" $ git push <remote> refs/tags/${TAG}
+```
+
+### Propose a pull request for flink-web
+
+The final step of building the candidate is to propose a website pull request.
+
+Start by updating the variables for the latest released version in the top-level **config.toml**, updating the version/date in **release\_archive.yml**, and adding urls in **flink\_cdc.yml**. Also, add a new blog entry announcing the release in **docs/content/posts**.
+
+Finally, propose a pull request with these changes. (Don’t merge before finalizing the release.)
+
+### Checklist to proceed to the next step
+
+1. Maven artifacts deployed to the staging repository of [repository.apache.org](https://repository.apache.org/content/repositories/)
+2. Source distribution deployed to the dev repository of [dist.apache.org](https://dist.apache.org/repos/dist/dev/flink/)
+3. Website pull request proposed to list the [release](http://flink.apache.org/downloads.html)
+4. Check `docs/config.toml` to ensure that
+   
+   - the version constants refer to the new version
+   - the `baseurl` does not point to `flink-cdc-docs-master`  but `flink-cdc-docs-release-X.Y` instead
+
+You can (optionally) also do additional verification by:
+
+1. ```
+   Check hashes (e.g. shasum -c *.sha512)
+   ```
+2. Check signatures (e.g. `gpg --verify flink-cdc-1.2.3-source-release.tar.gz.asc flink-cdc-1.2.3-source-release.tar.gz`)
+3. `grep` for legal headers in each file.
+
+## Vote on the release candidate
+
+Once you have built and individually reviewed the release candidate, please share it for the community-wide review. Please review foundation-wide [voting guidelines](http://www.apache.org/foundation/voting.html) for more information.
+
+Start the review-and-vote thread on the dev@ mailing list. Here’s an email template; please adjust as you see fit.
+
+```text
+From: Release Manager To: dev@flink.apache.org Subject: [VOTE] Apache Flink CDC Release 1.2.3, release candidate #3 Hi everyone, Please review and vote on the release candidate #3 for the version 1.2.3 of Apache Flink CDC, as follows: [ ] +1, Approve the release [ ] -1, Do not approve the release (please provide specific comments) **Release Overview** As an overview, the release consists of the following: a) Flink CDC source release to be deployed to dist.apache.org b) Maven artifacts to be deployed to the Maven Central Repository   **Staging Areas to Review** The staging areas containing the above mentioned artifacts are as follows, for your review: * All artifacts for a) can be found in the corresponding dev repository at dist.apache.org [1], which are signed with the key with fingerprint FFFFFFFFFFF [2] * All artifacts for b) can be found at the Apache Nexus Repository [3]   Other links for your review: * JIRA release notes [4] * Source code tag "release-1.2.3-rc3" with commit hash FFFFFFFFFFF [5] * PR for release announcement blog post of Flink CDC 1.2.3 in flink-web [6] **Vote Duration** The voting time will run for at least 72 hours. It is adopted by majority approval, with at least 3 PMC affirmative votes. Thanks, Release manager [1] link [2] https://dist.apache.org/repos/dist/release/flink/KEYS [3] link [4] link [5] link [6] link
+```
+
+If there are any issues found in the release candidate, reply on the vote thread to cancel the vote. There’s no need to wait 72 hours. Proceed to the `Fix Issues` step below and address the problem. However, some issues don’t require cancellation. For example, if an issue is found in the website pull request, just correct it on the spot and the vote can continue as-is.
+
+If there are no issues, reply on the vote thread to close the voting. Then, tally the votes in a separate email. Here’s an email template; please adjust as you see fit.
+
+```text
+From: Release Manager To: dev@flink.apache.org Subject: [RESULT] [VOTE] Apache Flink CDC Release 1.2.3, release candidate #3 I'm happy to announce that we have unanimously approved this release. There are XXX approving votes, XXX of which are binding: * approver 1 * approver 2 * approver 3 * approver 4 There are no disapproving votes. Thanks everyone!
+```
+
+### Checklist to proceed to the finalization step
+
+1. Community votes to release the proposed candidate, with at least three approving PMC votes
+
+## Fix any issues
+
+Any issues identified during the community review and vote should be fixed in this step.
+
+Code changes should be proposed as standard pull requests to the `master` branch and reviewed using the normal contributing process. Then, relevant changes should be cherry-picked into the release branch. The cherry-pick commits should then be proposed as the pull requests against the release branch, again reviewed and merged using the normal contributing process.
+
+Once all issues have been resolved, you should go back and build a new release candidate with these changes.
+
+### Checklist to proceed to the next step
+
+1. Issues identified during vote have been resolved, with fixes committed to the release branch.
+
+## Finalize the release
+
+Once the release candidate has been reviewed and approved by the community, the release should be finalized. This involves the final deployment of the release candidate to the release repositories, merging of the website changes, etc.
+
+### Deploy artifacts to Maven Central Repository
+
+Use the [Apache Nexus repository](https://repository.apache.org/) to release the staged binary artifacts to the Maven Central repository. In the `Staging Repositories` section, find the relevant release candidate `orgapacheflink-XXX` entry and click `Release`. Drop all other release candidates that are not being released.
+
+#### Deploy source and binary releases to [dist.apache.org](http://dist.apache.org)
+
+Copy the source and binary releases from the `dev` repository to the `release` repository at `dist.apache.org` using Subversion.
+
+```
+$ svn move -m "Release Flink CDC ${RELEASE_VERSION}" \ https://dist.apache.org/repos/dist/dev/flink/flink-cdc-${RELEASE_VERSION}-rc${RC_NUM} \ https://dist.apache.org/repos/dist/release/flink/flink-cdc-${RELEASE_VERSION}
+```
+
+(Note: Only PMC members have access to the release repository. If you do not have access, ask on the dev mailing list for assistance.)
+
+#### Remove old release candidates from [dist.apache.org](http://dist.apache.org)
+
+Remove the old release candidates from [https://dist.apache.org/repos/dist/dev/flink](https://dist.apache.org/repos/dist/dev/flink) using Subversion.
+
+```bash
+svn checkout https://dist.apache.org/repos/dist/dev/flink --depth=immediates cd flink svn remove flink-cdc-${RELEASE_VERSION}-rc* svn commit -m "Remove old release candidates for Apache Flink CDC ${RELEASE_VERSION}"
+```
+
+#### Remove outdated versions from [dist.apache.org](http://dist.apache.org)
+
+For a new major release remove all release files older than 2 versions, e.g., when releasing 1.7, remove all releases &lt;= 1.5.
+
+For a new bugfix version remove all release files for previous bugfix releases in the same series, e.g., when releasing 3.1.1, remove the 3.1.0 release.
+
+1. If you have not already, check out the Flink section of the `release` repository on `dist.apache.org` via Subversion. In a fresh directory:
+   
+   ```bash
+   svn checkout https://dist.apache.org/repos/dist/release/flink --depth=immediates cd flink
+   ```
+2. Remove files for outdated releases and commit the changes.
+   
+   ```bash
+   svn remove flink-cdc-<version_to_remove> svn commit
+   ```
+3. Verify that files are [removed](https://dist.apache.org/repos/dist/release/flink)
+
+### Git tag
+
+Create a new Git tag for the released version by copying the tag for the final release candidate, as follows:
+
+```bash
+git tag -s "release-${RELEASE_VERSION}" refs/tags/${TAG}^{} -m "Release Flink CDC ${RELEASE_VERSION}" git push <remote> refs/tags/release-${RELEASE_VERSION}
+```
+
+```
+
+```
+
+### Mark the version as released in JIRA
+
+In JIRA, inside [version management](https://issues.apache.org/jira/plugins/servlet/project-config/FLINK/versions), hover over the current release and a settings menu will appear. Click `Release`, and select today’s date.
+
+### Update flink-web repository
+
+1\) Add a new entry for the new Flink CDC release in the *docs/data/release\_archive.yml* file.
+
+2\) Add download links for the new Flink CDC release in the *docs/data/flink\_cdc.yml* file.
+
+3\) For major releases, update the following settings in the *docs/config.toml* file.
+
+```text
+FLINK_CDC_VERSION_STABLE: $RELEASE_VERSION FlinkCDCStableShortVersion: $SHORT_RELEASE_VERSION
+```
+
+4\) For major releases, add the release announcement under *docs/content/posts*.
+
+5\) Rebuild the website and push.
+
+### Checklist to proceed to the next step
+
+- Maven artifacts released and indexed in the [Maven Central Repository](https://search.maven.org/search?q=g%3Aorg.apache.flink%20flink-ml) (usually takes about a day to show up)
+- Source & binary distributions available in the release repository of [https://dist.apache.org/repos/dist/release/flink/](https://dist.apache.org/repos/dist/release/flink/)
+- Dev repository [https://dist.apache.org/repos/dist/dev/flink/](https://dist.apache.org/repos/dist/dev/flink/) is empty
+- Release tagged in the source code repository
+- Release version finalized in JIRA. (Note: Not all committers have administrator access to JIRA. If you end up getting permissions errors ask on the mailing list for assistance)
+- Website contains links to new release binaries and sources in download page
+- For major releases, the front page references the correct new major release version and directs to the correct link
+
+## Promote the release
+
+Once the release has been finalized, the last step of the process is to promote the release within the project and beyond. Please wait for 24h after finalizing the release in accordance with the [ASF release policy](http://www.apache.org/legal/release-policy.html#release-announcements).
+
+### Merge website pull request
+
+Merge the website pull request to [list the release](http://flink.apache.org/downloads.html). Make sure to regenerate the website as well, as it isn't build automatically.
+
+### Apache mailing lists
+
+Announce on the dev@ mailing list that the release has been finished.
+
+Announce on the release on the user@ mailing list, listing major improvements and contributions.
+
+Announce the release on the [announce@apache.org](mailto:announce@apache.org) mailing list.
+
+Please send the email using your [apache.org](http://apache.org) mailbox and also make sure you are using *plain text mode*.
+
+```text
+From: Release Manager To: dev@flink.apache.org, user@flink.apache.org, user-zh@flink.apache.org, announce@apache.org Subject: [ANNOUNCE] Apache Flink CDC 1.2.3 released The Apache Flink community is very happy to announce the release of Apache Flink CDC 1.2.3.   Apache Flink CDC is a distributed data integration tool for real time data and batch data, bringing the simplicity and elegance of data integration via YAML to describe the data movement and transformation in a data pipeline.   Please check out the release blog post for an overview of the release: https://flink.apache.org/news/2020/04/07/release-cdc-2.0.0.html The release is available for download at: https://flink.apache.org/downloads.html Maven artifacts for Flink CDC can be found at: https://search.maven.org/search?q=g:org.apache.flink%20cdc The full release notes are available in Jira: https://issues.apache.org/jira/secure/ReleaseNote.jspa?projectId=12315522&version=12346878 We would like to thank all contributors of the Apache Flink community who made this release possible! Regards, Release Manager
+```
+
+### Recordkeeping
+
+Use [https://reporter.apache.org/addrelease.html?flink](https://reporter.apache.org/addrelease.html?flink) to seed the information about the release into future project reports.
+
+### Flink blog
+
+Major or otherwise important releases should have a blog post. Write one if needed for this particular release. Minor releases that don’t introduce new major functionality don’t necessarily need to be blogged.
+
+Please make sure that the release notes of the documentation (see section "Review and update documentation") are linked from the blog post of a major release.  
+We usually include the names of all contributors in the announcement blog post. Use the following command to get the list of contributors:
+
+```
+git log --pretty="%an%n%cn" <fromCommit>..<toCommit> | sort | uniq | tr "\n" "," | sed 's/,/, /g'
+```
+
+### Social media
+
+Tweet, post on Facebook, LinkedIn, and other platforms. Ask other contributors to do the same.
+
+## Improve the process
+
+It is important that we improve the release processes over time. Once you’ve finished the release, please take a step back and look what areas of this process and be improved. Perhaps some part of the process can be simplified. Perhaps parts of this guide can be clarified.
+
+If we have specific ideas, please start a discussion on the dev@ mailing list and/or propose a pull request to update this guide. Thanks!

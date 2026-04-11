@@ -1,6 +1,9 @@
 package confluence
 
 import (
+	"flag"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -273,6 +276,62 @@ See [Configuration Guide](Configuration Guide) for details.
 
 			if got != want {
 				t.Errorf("Convert()\ngot:\n%s\n\nwant:\n%s", got, want)
+			}
+		})
+	}
+}
+
+var updateGolden = flag.Bool("update-golden", false, "update golden files")
+
+func TestGoldenFiles(t *testing.T) {
+	fixtures, err := filepath.Glob("testdata/*.xhtml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fixtures) == 0 {
+		t.Skip("no .xhtml fixtures in testdata/")
+	}
+
+	for _, fixture := range fixtures {
+		name := strings.TrimSuffix(filepath.Base(fixture), ".xhtml")
+		t.Run(name, func(t *testing.T) {
+			input, err := os.ReadFile(fixture)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			got, err := Convert(string(input))
+			if err != nil {
+				t.Fatalf("Convert: %v", err)
+			}
+
+			goldenPath := strings.TrimSuffix(fixture, ".xhtml") + ".golden"
+
+			if *updateGolden {
+				if err := os.WriteFile(goldenPath, []byte(got), 0644); err != nil {
+					t.Fatal(err)
+				}
+				t.Logf("updated %s", goldenPath)
+				return
+			}
+
+			want, err := os.ReadFile(goldenPath)
+			if err != nil {
+				t.Fatalf("reading golden file (run with -update-golden to create): %v", err)
+			}
+
+			if got != string(want) {
+				gotLines := strings.Split(got, "\n")
+				wantLines := strings.Split(string(want), "\n")
+				for i := 0; i < len(gotLines) && i < len(wantLines); i++ {
+					if gotLines[i] != wantLines[i] {
+						t.Errorf("first diff at line %d:\n  got:  %q\n  want: %q", i+1, gotLines[i], wantLines[i])
+						break
+					}
+				}
+				if len(gotLines) != len(wantLines) {
+					t.Errorf("line count differs: got %d, want %d", len(gotLines), len(wantLines))
+				}
 			}
 		})
 	}

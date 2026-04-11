@@ -1,0 +1,73 @@
+Add an Info, Tip, Note, or Warning macro to your page to make important information stand out. The macro is used to format your text in a colored panel. 
+
+As the names suggest, these macros are great for:
+
+- Tips and tricks
+- Warnings
+- Important notes and other info.
+
+You can configure this macro with or without the icon and title. 
+
+> **On this page:**
+
+*Screenshot: examples of the Info, Note, Tip, and Warning macros on a page*
+
+![note-macro-view.png](note-macro-view.png)
+
+> Want more control over the color of the boxes? Try the [Panel Macro](Panel Macro).
+
+## Add this macro to your page
+
+To add the Info, Tip, Note, or Warning macro to a page:
+
+1. Choose either **Info**, **Tip**, **Note**, or **Warning** from the **Formatting** categories.
+2. Enter a title for the panel.
+3. Choose **Insert**.
+
+You can then publish your page to see the macro in action.  
+
+*Screenshot: The Info, Tip, Note, and Warning macros in the editor.* 
+
+*![note-macro-body.png](note-macro-body.png)*
+
+## Change the macro parameters
+
+Here's a list of the parameters available in this macro. 
+
+Parameter
+
+Default
+
+Description
+
+Optional Title  
+`(title`) 
+
+none
+
+The title of the box. If specified, the title text will be displayed in bold next to the icon.
+
+Show information/tip/Exclamation Mark/Warning Icon  
+`(icon`) 
+
+true
+
+If "false", the icon will not be displayed.
+
+## Other ways to add this macro
+
+#### Add this macro as you type
+
+#### Add this macro using wiki markup
+
+**Macro name:** `info/tip/note/warning`
+
+**Macro body:** Accepts rich text.
+
+```
+{info:title=This is my title|icon=false} This is _important_ information. {info}
+```
+
+> **Using Confluence Cloud?** Head to [Add formatting to your page](Add formatting to your page) if your info panel looks more like the one below.
+
+![info-macro-cloud.png](info-macro-cloud.png)

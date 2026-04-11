@@ -1,0 +1,313 @@
+Add a Code Block macro to your page to display code examples with syntax highlighting for more than 80 programming languages. 
+
+This is great for sharing code snippets such as:
+
+- sample code
+- terminal commands
+- excerpts from application logs.
+
+> **On this page:**
+
+![code-block-view.png](code-block-view.png)
+
+*Screenshot: code sample in the Code Block macro, with syntax highlighting*.
+
+## Code Block macro configuration options
+
+You can customize the look of your Code Block macro in a number of ways.![code-block-params.png](code-block-params.png)
+
+The table below outlines each of the parameters available.
+
+Field
+
+Paramaeter name  (used in Confluence storage format or wikimarkup)
+
+Default
+
+Description
+
+Syntax highlighting
+
+`language`
+
+plain text
+
+Specifies the language (or environment) for syntax highlighting. If you’re an admin, you can configure the default language in the admin area of Confluence.
+
+Title
+
+`title`
+
+none
+
+Adds a title to the code block. If specified, the title will be displayed in a header row at the top of the code block.
+
+Collapsible
+
+`collapse`
+
+false
+
+If selected, the code macro's content will be collapsed upon visiting or refreshing the Confluence page. Clicking the **`expand source`** link allows you to view this content. If false, the code macro's content is always displayed in full.
+
+Show line numbers
+
+`linenumbers`
+
+false
+
+If selected, line numbers will be shown to the left of the lines of code.
+
+First line number
+
+`firstline`
+
+1
+
+When **Show line numbers** is selected, this value defines the number of the first line of code.
+
+Turn on wrap
+
+![word-wrap.png](word-wrap.png)
+
+**-**
+
+false
+
+Toggle this button to enable or disable text wrapping within the code block.
+
+This button is also available in the top right corner of the code block macro for anyone reading your page.
+
+Copy as text
+
+![copy-text.png](copy-text.png)
+
+**-**
+
+\-
+
+Click on this button to copy your block of code as plain text.
+
+This button is also available in the top right corner of the code block macro for anyone reading your page.
+
+## Supported Code Block macro languages
+
+Code Block macro supports over 80 programming languages.
+
+### A
+
+ABAP  
+ActionScript  
+Ada  
+AppleScript  
+Arduino  
+Autoit
+
+### J
+
+Java  
+JavaFX  
+JavaScript  
+JSON  
+JSX  
+Julia
+
+### Q
+
+QML
+
+### C
+
+C  
+C++  
+Clojure  
+CoffeeScript  
+ColdFusion  
+CSharp  
+CSS  
+CUDA
+
+### K
+
+Kotlin
+
+### R
+
+R  
+Racket  
+reStructuredText  
+Ruby  
+Rust
+
+### D
+
+D  
+Dart  
+Diff  
+Dockerfile
+
+### L
+
+LiveScript  
+Lua
+
+### S
+
+Sass  
+Scala  
+Scheme  
+Shell  
+Smalltalk  
+SplunkSPL  
+SQL  
+StandardML  
+Swift
+
+### E
+
+Elixir  
+Erlang
+
+### M
+
+Mathematica  
+MATLAB
+
+### T
+
+Tcl  
+TeX  
+TSX  
+TypeScript
+
+### F
+
+Fortran  
+FoxPro
+
+### N
+
+NGINX
+
+### V
+
+Vala  
+VbNet  
+Verilog  
+VHDL  
+VisualBasic
+
+### G
+
+Go  
+GraphQL  
+Groovy
+
+### O
+
+Objective-C  
+Objective-J  
+OCaml  
+Octave
+
+### X
+
+XML  
+XQuery
+
+### H
+
+Haskell  
+Haxe  
+HCL  
+HTML
+
+### P
+
+Pascal  
+Perl  
+PHP  
+PlainText  
+PowerShell  
+Prolog  
+Protocol Buffers  
+Puppet  
+Python
+
+### Y
+
+Yaml
+
+## Add the Code Block macro to your page
+
+To add the Code Block macro to a page:
+
+1. From the **Formatting** category, select **Code Block** .
+2. To choose your preferred language, either start typing its name in the **Syntax highlighting** field, or click on the dropdown button to scroll through the list.  
+   ![insert-code-block.png](insert-code-block.png)
+3. Use the fields above to customize how the code block should appear on your page.
+4. Select the **Insert** button.
+5. Type or paste your code into the macro placeholder.   
+   Note that any white space contained in the placeholder *is not* manipulated in any way by the Code Block macro. This is to provide the writer with flexibility over code indentation.
+
+You can now publish your page to see the macro in action. Once published, readers of your page will also be able to use options **Turn on wrap ![word-wrap.png](word-wrap.png)**and **Copy as text ![copy-text.png](copy-text.png)**, displayed in the top right corner of the code block.
+
+![hover-tools.png](hover-tools.png)
+
+## Change the macro parameters
+
+Macro parameters are used to change the behavior of a macro. For example, you can directly update the language from the toolbar that appears while you’re editing your code on the page. 
+
+To change the macro parameters:
+
+1. In the editor, click anywhere within the macro placeholder to display a toolbar.  
+   ![config-buttons.png](config-buttons.png)
+2. Select **Edit**
+3. Update the parameters as required then select **Insert**.
+
+## Administer the Code Block macro
+
+You can configure the Code Block macro to use a specific language and theme by default. You need Confluence Administrator permissions to change the default language .
+
+To set the default language of code blocks in your site:
+
+1. Go to then **Configure Code Macro**.
+2. From the **Default language** dropdown, select your preferred default language.
+3. Select **Save**.
+
+All new code blocks will use the default language unless you specify otherwise. Existing code blocks will be unchanged. 
+
+Uploaded custom   languages were removed in Confluence 9.0. Previously uploaded languages are no longer supported . You can uninstall these from your system.
+
+To remove a user-installed language:
+
+1. Go to .
+2. Go to **User-installed Apps** and locate the app for your uploaded language.
+3. Look for the following:  
+   **Custom Code Macro Highlighting for...**
+4. If you have many apps, you might prefer to search for the namspace:  
+   `com.atlassian.confluence.ext.code.custom`.
+5. Select **Uninstall** or **Disable**.
+
+The custom language will no longer appear in the Code Block macro. 
+
+## Other ways to add this macro
+
+#### Add this macro as you type
+
+#### Add this macro using wiki markup
+
+**Macro name:** `code`
+
+**Macro body:** Accepts plain text.
+
+```
+{code:title=This is my title|linenumbers=true|language=javascript|firstline=0001|collapse=true} This is my code {code}
+```
+
+> **Tip:** **Do more with Confluence**
+
+Extend Confluence with one of the hundreds of other macros in the [Atlassian Marketplace](https://marketplace.atlassian.com/search?category=Macros&hosting=server). Some of our most popular include:
+
+- [Include Bitbucket Server for Confluence](https://marketplace.atlassian.com/apps/1212529/include-bitbucket-server-for-confluence?hosting=server&tab=overview) - Easily include code snippets in Confluence that sync automatically to Bitbucket Server.
+- [Markdown Extension for Confluence](https://marketplace.atlassian.com/apps/1215703/markdown-extensions-for-confluence?hosting=server&tab=overview) - Embed markdown from private and public Github & Bitbucket repositories in Confluence.
