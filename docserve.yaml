@@ -5,28 +5,29 @@ sources:
   - name: spring-boot
     provider: github
     repo: spring-projects/spring-boot
-    ref: main
     proxy: false
-    paths:
-      - "documentation/spring-boot-docs/"
+    refs:
+      - ref: main
+        paths:
+          - "documentation/spring-boot-docs/"
 
-  - name: atlassian-confluence-docs
+  - name: atlassian-confluence
     provider: confluence
     base_url: https://confluence.atlassian.com
-    ref: "1627457156"      # Info/Tip/Note/Warning Macros page
-    depth: 0               # root page only
     proxy: false
+    refs:
+      - space: CONF
+        id: "1627457156"      # Info/Tip/Note/Warning Macros page
+        depth: 0
 
-  - name: apache-kafka
+  - name: apache-wiki
     provider: confluence
     base_url: https://cwiki.apache.org/confluence
-    ref: "50859233"        # Kafka Improvement Proposals
-    depth: 1
     proxy: false
-
-  - name: apache-flink
-    provider: confluence
-    base_url: https://cwiki.apache.org/confluence
-    ref: "308152924"       # Creating a Flink CDC Release
-    depth: 0
-    proxy: false
+    refs:
+      - space: KAFKA
+        id: "50859233"        # Kafka Improvement Proposals
+        depth: 1
+      - space: FLINK
+        id: "308152924"       # Creating a Flink CDC Release
+        depth: 0

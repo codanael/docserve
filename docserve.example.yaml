@@ -20,15 +20,20 @@ sources:
   - name: my-github-docs
     provider: github
     repo: myorg/myrepo        # owner/repo
-    ref: main                 # branch, tag, or commit SHA
     proxy: true               # use the global proxy (this is the default)
-    paths:
-      - docs/                 # directory (trailing slash) or exact file path
-      - README.md
-    schedule: "0 * * * *"    # cron expression; omit to disable scheduled sync
+    schedule: "0 * * * *"     # cron expression; omit to disable scheduled sync
     auth:
       type: bearer
       token_env: GITHUB_TOKEN # name of the environment variable holding the token
+    refs:
+      - ref: main             # branch, tag, or commit SHA
+        paths:
+          - docs/             # directory (trailing slash) or exact file path
+          - README.md
+      - ref: v2.0             # index a second branch/tag from the same repo
+        name: my-docs-v2      # optional: override the default library name
+        paths:
+          - docs/
 
   # Azure DevOps source example — uses basic auth.
   # Uncomment and fill in to enable.
@@ -39,31 +44,38 @@ sources:
   #   project: myproject      # Azure DevOps project
   #   repo: myrepo            # Git repository name
   #   base_url: https://dev.azure.com
-  #   ref: refs/heads/main
   #   proxy: false            # bypass the global proxy for this source
-  #   paths:
-  #     - wiki/
   #   schedule: "30 * * * *"
   #   auth:
   #     type: basic
   #     username_env: ADO_USER
   #     password_env: ADO_PAT
+  #   refs:
+  #     - ref: refs/heads/main
+  #       paths:
+  #         - wiki/
 
-  # Confluence Data Center source example — uses personal access token.
+  # Confluence source example — uses personal access token.
+  # Each ref targets a specific page (by space + page ID) and its descendants.
   # Uncomment and fill in to enable.
   #
   # - name: my-confluence-docs
   #   provider: confluence
   #   base_url: https://confluence.example.com  # Confluence instance URL
-  #   ref: "123456"              # page ID of the root page to index
-  #   depth: 3                   # subtree depth: 0=root only, -1=unlimited (default)
   #   proxy: false
   #   schedule: "0 */4 * * *"
   #   auth:
   #     type: bearer
   #     token_env: CONFLUENCE_PAT  # personal access token (DC 7.9+)
+  #   refs:
+  #     - space: DEV                   # Confluence space key
+  #       id: "123456"                 # page ID of the root page to index
+  #       depth: 3                     # subtree depth: 0=root only, -1=unlimited (default)
+  #     - space: ARCH
+  #       id: "789012"
+  #       name: architecture-decisions  # optional: override library name
   #
-  # # Alternative: basic auth (username + password/token)
+  # # Alternative auth: basic auth (username + password/token)
   # # auth:
   # #   type: basic
   # #   username_env: CONFLUENCE_USER
