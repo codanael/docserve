@@ -1,0 +1,62 @@
+# docserve
+
+Self-hosted MCP documentation server. Fetches docs from Git providers, indexes with SQLite FTS5, serves to LLM agents via MCP Streamable HTTP.
+
+## Build & Run
+
+```bash
+make build                          # CGO_ENABLED=0 static binary
+make test                           # unit tests
+go test -tags=integration ./...     # integration tests (MCP protocol flow)
+make lint                           # golangci-lint
+```
+
+## Project Structure
+
+```
+cmd/docserve/main.go        CLI entrypoint (os.Args + flag.NewFlagSet, no framework)
+internal/config/             YAML config parsing, validation, proxy/auth config
+internal/index/              SQLite FTS5 store, chunkers (markdown + asciidoc), search
+internal/source/             Provider interface, GitHub + Azure DevOps, fetch pipeline
+internal/mcp/                MCP server, 3 tool handlers, Streamable HTTP transport
+internal/scheduler/          Cron-based periodic fetch scheduler
+```
+
+## Dependencies
+
+Only 3 external modules — everything else is stdlib:
+- `github.com/mark3labs/mcp-go` — MCP protocol + Streamable HTTP transport
+- `modernc.org/sqlite` — SQLite pure Go (no CGO)
+- `gopkg.in/yaml.v3` — config parsing
+
+## Key Design Decisions
+
+- **No cobra, no goldmark, no HTTP framework.** CLI is `os.Args` + `flag.NewFlagSet`. Chunking is line-by-line state machines. Health endpoints use `net/http` stdlib.
+- **Provider pattern** for Git hosting: each provider implements `Resolve(ref) → sha` and `Fetch(sha, paths, destDir)`. Add a new provider by implementing that interface.
+- **Per-source proxy routing**: each source declares `proxy: true/false`. Two `http.Client` instances (proxied + direct) are created at startup.
+- **Auth via env vars only**: credentials are never in the YAML config. `token_env`, `username_env`, `password_env` reference environment variable names.
+- **FTS5 search**: BM25 ranking with weights (path=1.5, breadcrumb=2.0, content=1.0). Token budget caps results. Semantic search is a future extension.
+- **MCP tool output**: `list-libraries` and `resolve-library` return `structuredContent` + JSON text fallback. `get-library-docs` returns human-readable markdown text (not JSON).
+- **Transactional indexation**: chunks are replaced atomically per library in a single SQLite transaction.
+
+## Testing
+
+- Unit tests: `go test ./...` (chunkers, config, store, search, tools, scheduler)
+- Integration: `go test -tags=integration ./...` (full MCP protocol: init → tools/list → tools/call → verify)
+- MCP Inspector: `npx @modelcontextprotocol/inspector --cli http://localhost:8080/mcp --method tools/list`
+
+## Adding a New Provider
+
+1. Create `internal/source/newprovider.go` implementing `source.Provider`
+2. Add the case in `NewProvider()` factory in `provider.go`
+3. Add the provider name to `validProviders` in `internal/config/config.go`
+4. Write tests with `httptest` server serving fake archives
+
+## Release
+
+GoReleaser builds linux/amd64 + linux/arm64 static binaries with cosign signing. Dockerfile produces a `scratch` image (~15 MB).
+
+```bash
+goreleaser check          # validate config
+goreleaser release        # full release
+```
