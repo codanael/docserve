@@ -23,30 +23,34 @@ func NewServer(store *index.Store, version string) *Server {
 
 	handlers := &ToolHandlers{Store: store}
 
-	// Register list-libraries tool
+	readOnly := mcplib.WithReadOnlyHintAnnotation(true)
+	notDestructive := mcplib.WithDestructiveHintAnnotation(false)
+	idempotent := mcplib.WithIdempotentHintAnnotation(true)
+
 	mcpSrv.AddTool(
 		mcplib.NewTool("list-libraries",
 			mcplib.WithDescription("List all indexed documentation libraries"),
+			readOnly, notDestructive, idempotent,
 		),
 		handlers.ListLibraries,
 	)
 
-	// Register resolve-library tool
 	mcpSrv.AddTool(
 		mcplib.NewTool("resolve-library",
 			mcplib.WithDescription("Resolve a library by name query, returning the first match"),
 			mcplib.WithString("query", mcplib.Required(), mcplib.Description("The library name query to search for")),
+			readOnly, notDestructive, idempotent,
 		),
 		handlers.ResolveLibrary,
 	)
 
-	// Register get-library-docs tool
 	mcpSrv.AddTool(
 		mcplib.NewTool("get-library-docs",
 			mcplib.WithDescription("Search a library's documentation and return matching content"),
 			mcplib.WithString("library", mcplib.Required(), mcplib.Description("The library name to search")),
 			mcplib.WithString("query", mcplib.Required(), mcplib.Description("The search query")),
 			mcplib.WithNumber("max_tokens", mcplib.Description("Maximum token budget for results (default 5000)")),
+			readOnly, notDestructive, idempotent,
 		),
 		handlers.GetLibraryDocs,
 	)
