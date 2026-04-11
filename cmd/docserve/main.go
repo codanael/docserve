@@ -112,34 +112,40 @@ func cmdServe(args []string) {
 
 	sched := scheduler.New(func(name string) {
 		for _, src := range cfg.Sources {
-			if src.Name != name {
-				continue
-			}
-			client := proxied
-			if !src.Proxy {
-				client = direct
-			}
-			prov, err := source.NewProvider(src, client)
-			if err != nil {
-				log.Printf("[scheduler] %s: %v", name, err)
-				return
-			}
-			fetcher := source.NewFetcher(store, cfg.DataDir)
-			result, err := fetcher.FetchSource(context.Background(), src, prov)
-			if err != nil {
-				log.Printf("[scheduler] %s: %v", name, err)
-				return
-			}
-			if result.Updated {
-				log.Printf("[scheduler] %s: updated %d chunks", name, result.ChunkCount)
+			for _, ref := range src.Refs {
+				libName := config.LibraryName(src, ref)
+				if libName != name {
+					continue
+				}
+				client := proxied
+				if !src.Proxy {
+					client = direct
+				}
+				prov, err := source.NewProvider(src, ref, client)
+				if err != nil {
+					log.Printf("[scheduler] %s: %v", name, err)
+					return
+				}
+				fetcher := source.NewFetcher(store, cfg.DataDir)
+				result, err := fetcher.FetchSource(context.Background(), src, ref, libName, prov)
+				if err != nil {
+					log.Printf("[scheduler] %s: %v", name, err)
+					return
+				}
+				if result.Updated {
+					log.Printf("[scheduler] %s: updated %d chunks", name, result.ChunkCount)
+				}
 			}
 		}
 	})
 
 	for _, src := range cfg.Sources {
 		if src.Schedule != "" {
-			if err := sched.Add(src.Name, src.Schedule); err != nil {
-				log.Printf("warning: %v", err)
+			for _, ref := range src.Refs {
+				libName := config.LibraryName(src, ref)
+				if err := sched.Add(libName, src.Schedule); err != nil {
+					log.Printf("warning: %v", err)
+				}
 			}
 		}
 	}
@@ -205,35 +211,36 @@ func cmdFetch(args []string) {
 	ctx := context.Background()
 
 	for _, src := range cfg.Sources {
-		if *sourceName != "" && src.Name != *sourceName {
-			continue
-		}
-
-		var client *http.Client
-		if src.Proxy {
-			client = proxied
-		} else {
+		client := proxied
+		if !src.Proxy {
 			client = direct
 		}
 
-		authClient := source.WrapClientAuth(client, src.Auth)
+		for _, ref := range src.Refs {
+			libName := config.LibraryName(src, ref)
 
-		prov, err := source.NewProvider(src, authClient)
-		if err != nil {
-			log.Printf("[%s] error creating provider: %v", src.Name, err)
-			continue
-		}
+			if *sourceName != "" && libName != *sourceName && src.Name != *sourceName {
+				continue
+			}
 
-		result, err := fetcher.FetchSource(ctx, src, prov)
-		if err != nil {
-			log.Printf("[%s] fetch error: %v", src.Name, err)
-			continue
-		}
+			authClient := source.WrapClientAuth(client, src.Auth)
+			prov, err := source.NewProvider(src, ref, authClient)
+			if err != nil {
+				log.Printf("[%s] error creating provider: %v", libName, err)
+				continue
+			}
 
-		if result.Updated {
-			log.Printf("[%s] updated: sha=%s chunks=%d", result.Source, result.SHA, result.ChunkCount)
-		} else {
-			log.Printf("[%s] already up to date: sha=%s", result.Source, result.SHA)
+			result, err := fetcher.FetchSource(ctx, src, ref, libName, prov)
+			if err != nil {
+				log.Printf("[%s] fetch error: %v", libName, err)
+				continue
+			}
+
+			if result.Updated {
+				log.Printf("[%s] updated: sha=%s chunks=%d", result.Source, result.SHA, result.ChunkCount)
+			} else {
+				log.Printf("[%s] already up to date: sha=%s", result.Source, result.SHA)
+			}
 		}
 	}
 }
