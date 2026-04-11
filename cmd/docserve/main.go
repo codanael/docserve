@@ -16,6 +16,7 @@ import (
 	"github.com/codanael/docserve/internal/config"
 	"github.com/codanael/docserve/internal/index"
 	mcpsrv "github.com/codanael/docserve/internal/mcp"
+	"github.com/codanael/docserve/internal/scheduler"
 	"github.com/codanael/docserve/internal/source"
 )
 
@@ -107,6 +108,43 @@ func cmdServe(args []string) {
 	store := openStore(cfg)
 	defer store.Close()
 
+	proxied, direct := buildClients(cfg)
+
+	sched := scheduler.New(func(name string) {
+		for _, src := range cfg.Sources {
+			if src.Name != name {
+				continue
+			}
+			client := proxied
+			if !src.Proxy {
+				client = direct
+			}
+			prov, err := source.NewProvider(src, client)
+			if err != nil {
+				log.Printf("[scheduler] %s: %v", name, err)
+				return
+			}
+			fetcher := source.NewFetcher(store, cfg.DataDir)
+			result, err := fetcher.FetchSource(context.Background(), src, prov)
+			if err != nil {
+				log.Printf("[scheduler] %s: %v", name, err)
+				return
+			}
+			if result.Updated {
+				log.Printf("[scheduler] %s: updated %d chunks", name, result.ChunkCount)
+			}
+		}
+	})
+
+	for _, src := range cfg.Sources {
+		if src.Schedule != "" {
+			if err := sched.Add(src.Name, src.Schedule); err != nil {
+				log.Printf("warning: %v", err)
+			}
+		}
+	}
+	sched.Start()
+
 	srv := mcpsrv.NewServer(store, version)
 
 	httpSrv := &http.Server{
@@ -126,6 +164,8 @@ func cmdServe(args []string) {
 
 	<-ctx.Done()
 	log.Println("shutting down...")
+
+	sched.Stop()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
