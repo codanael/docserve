@@ -1,12 +1,9 @@
-FROM golang:1.23-alpine AS builder
-WORKDIR /src
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-ARG TARGETARCH
-RUN CGO_ENABLED=0 GOARCH=${TARGETARCH} go build -ldflags "-s -w" -o /docserve ./cmd/docserve
+FROM alpine:3 AS certs
+RUN apk add --no-cache ca-certificates
+
+ARG TARGETPLATFORM
 
 FROM scratch
-COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
-COPY --from=builder /docserve /docserve
+COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY ${TARGETPLATFORM}/docserve /docserve
 ENTRYPOINT ["/docserve"]
