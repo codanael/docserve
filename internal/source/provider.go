@@ -24,6 +24,8 @@ func NewProvider(cfg config.SourceConfig, client *http.Client) (Provider, error)
 		return NewGitHubProvider(cfg, client), nil
 	case "azure-devops":
 		return NewAzureDevOpsProvider(cfg, client), nil
+	case "confluence":
+		return NewConfluenceProvider(cfg, client), nil
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
 	}
