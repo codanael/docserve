@@ -83,7 +83,7 @@ func (p *ConfluenceProvider) Resolve(ctx context.Context, ref string) (string, e
 
 	h := sha256.New()
 	for _, pg := range pages {
-		fmt.Fprintf(h, "%s:%d\n", pg.ID, pg.Version) //nolint:errcheck
+		_, _ = fmt.Fprintf(h, "%s:%d\n", pg.ID, pg.Version)
 	}
 	hex := fmt.Sprintf("%x", h.Sum(nil))
 	if len(hex) > 40 {
@@ -233,7 +233,7 @@ func (p *ConfluenceProvider) fetchPage(ctx context.Context, pageID string, withB
 	if err != nil {
 		return confluencePage{}, err
 	}
-	defer body.Close() //nolint:errcheck
+	defer func() { _ = body.Close() }()
 
 	var raw struct {
 		ID      string `json:"id"`

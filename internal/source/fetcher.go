@@ -71,7 +71,7 @@ func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, ref 
 			paths = []string{""}
 		}
 		if err := prov.Fetch(ctx, sha, paths, rawDir); err != nil {
-			os.RemoveAll(rawDir) //nolint:errcheck
+			_ = os.RemoveAll(rawDir)
 			return nil, fmt.Errorf("fetch source %q: %w", libName, err)
 		}
 	} else {

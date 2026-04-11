@@ -73,7 +73,7 @@ func (p *confluencePlugin) handleRender(ctx converter.Context, w converter.Write
 		ctx.RenderChildNodes(ctx, w, n)
 		return converter.RenderSuccess
 	case "ac:plain-text-body":
-		w.WriteString(getTextContent(n)) //nolint:errcheck
+		_, _ = w.WriteString(getTextContent(n))
 		return converter.RenderSuccess
 	}
 
@@ -146,12 +146,12 @@ func (p *confluencePlugin) renderCodeBlock(_ converter.Context, w converter.Writ
 	lang := getMacroParam(n, "language")
 	body := getPlainTextBody(n)
 
-	w.WriteString("\n\n```" + lang + "\n") //nolint:errcheck
-	w.WriteString(body)                  //nolint:errcheck
+	_, _ = w.WriteString("\n\n```" + lang + "\n")
+	_, _ = w.WriteString(body)
 	if body != "" && !strings.HasSuffix(body, "\n") {
-		w.WriteString("\n") //nolint:errcheck
+		_, _ = w.WriteString("\n")
 	}
-	w.WriteString("```\n\n") //nolint:errcheck
+	_, _ = w.WriteString("```\n\n")
 	return converter.RenderSuccess
 }
 
@@ -163,7 +163,7 @@ func (p *confluencePlugin) renderAdmonition(ctx converter.Context, w converter.W
 	}
 	content = strings.TrimSpace(content)
 
-	w.WriteString("\n\n> **" + label + ":** " + content + "\n\n") //nolint:errcheck
+	_, _ = w.WriteString("\n\n> **" + label + ":** " + content + "\n\n")
 	return converter.RenderSuccess
 }
 
@@ -176,11 +176,11 @@ func (p *confluencePlugin) renderPanel(ctx converter.Context, w converter.Writer
 	}
 	content = strings.TrimSpace(content)
 
-	w.WriteString("\n\n") //nolint:errcheck
+	_, _ = w.WriteString("\n\n")
 	if title != "" {
-		w.WriteString("> **" + title + "**\n> " + content + "\n\n") //nolint:errcheck
+		_, _ = w.WriteString("> **" + title + "**\n> " + content + "\n\n")
 	} else {
-		w.WriteString("> " + content + "\n\n") //nolint:errcheck
+		_, _ = w.WriteString("> " + content + "\n\n")
 	}
 	return converter.RenderSuccess
 }
@@ -197,13 +197,13 @@ func (p *confluencePlugin) renderExpand(ctx converter.Context, w converter.Write
 	}
 	content = strings.TrimSpace(content)
 
-	w.WriteString("\n\n**" + title + "**\n\n" + content + "\n\n") //nolint:errcheck
+	_, _ = w.WriteString("\n\n**" + title + "**\n\n" + content + "\n\n")
 	return converter.RenderSuccess
 }
 
 func (p *confluencePlugin) renderStatus(_ converter.Context, w converter.Writer, n *html.Node) converter.RenderStatus {
 	title := getMacroParam(n, "title")
-	w.WriteString("`[" + title + "]`") //nolint:errcheck
+	_, _ = w.WriteString("`[" + title + "]`")
 	return converter.RenderSuccess
 }
 
@@ -225,7 +225,7 @@ func (p *confluencePlugin) renderLink(ctx converter.Context, w converter.Writer,
 		if linkText == "" {
 			linkText = title
 		}
-		w.WriteString("[" + linkText + "](" + title + ")") //nolint:errcheck
+		_, _ = w.WriteString("[" + linkText + "](" + title + ")")
 		return converter.RenderSuccess
 	}
 
@@ -235,7 +235,7 @@ func (p *confluencePlugin) renderLink(ctx converter.Context, w converter.Writer,
 		if linkText == "" {
 			linkText = filename
 		}
-		w.WriteString("[" + linkText + "](" + filename + ")") //nolint:errcheck
+		_, _ = w.WriteString("[" + linkText + "](" + filename + ")")
 		return converter.RenderSuccess
 	}
 
@@ -245,7 +245,7 @@ func (p *confluencePlugin) renderLink(ctx converter.Context, w converter.Writer,
 		if linkText == "" {
 			linkText = href
 		}
-		w.WriteString("[" + linkText + "](" + href + ")") //nolint:errcheck
+		_, _ = w.WriteString("[" + linkText + "](" + href + ")")
 		return converter.RenderSuccess
 	}
 
@@ -260,14 +260,14 @@ func (p *confluencePlugin) renderImage(_ converter.Context, w converter.Writer, 
 	// ri:attachment image
 	if att := findChild(n, "ri:attachment"); att != nil {
 		filename := getAttr(att, "ri:filename")
-		w.WriteString("![" + filename + "](" + filename + ")") //nolint:errcheck
+		_, _ = w.WriteString("![" + filename + "](" + filename + ")")
 		return converter.RenderSuccess
 	}
 
 	// ri:url image
 	if urlNode := findChild(n, "ri:url"); urlNode != nil {
 		href := getAttr(urlNode, "ri:value")
-		w.WriteString("![image](" + href + ")") //nolint:errcheck
+		_, _ = w.WriteString("![image](" + href + ")")
 		return converter.RenderSuccess
 	}
 
@@ -277,9 +277,9 @@ func (p *confluencePlugin) renderImage(_ converter.Context, w converter.Writer, 
 // --- Task Lists ---
 
 func (p *confluencePlugin) renderTaskList(ctx converter.Context, w converter.Writer, n *html.Node) converter.RenderStatus {
-	w.WriteString("\n\n") //nolint:errcheck
+	_, _ = w.WriteString("\n\n")
 	ctx.RenderChildNodes(ctx, w, n)
-	w.WriteString("\n") //nolint:errcheck
+	_, _ = w.WriteString("\n")
 	return converter.RenderSuccess
 }
 
@@ -294,9 +294,9 @@ func (p *confluencePlugin) renderTask(ctx converter.Context, w converter.Writer,
 	}
 
 	if checked {
-		w.WriteString("- [x] " + content + "\n") //nolint:errcheck
+		_, _ = w.WriteString("- [x] " + content + "\n")
 	} else {
-		w.WriteString("- [ ] " + content + "\n") //nolint:errcheck
+		_, _ = w.WriteString("- [ ] " + content + "\n")
 	}
 	return converter.RenderSuccess
 }
@@ -370,4 +370,3 @@ var _ converter.Plugin = (*confluencePlugin)(nil)
 
 // Ensure bytes.Buffer satisfies converter.Writer (it does by stdlib).
 var _ converter.Writer = (*bytes.Buffer)(nil)
-

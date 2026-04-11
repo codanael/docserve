@@ -58,7 +58,7 @@ func TestAzureDevOpsResolve(t *testing.T) {
 			"count": 1,
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(resp) //nolint:errcheck
+		_ = json.NewEncoder(w).Encode(resp)
 	}))
 	defer srv.Close()
 
@@ -108,7 +108,7 @@ func TestAzureDevOpsFetch(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/zip")
-		w.Write(zipData) //nolint:errcheck
+		_, _ = w.Write(zipData)
 	}))
 	defer srv.Close()
 
@@ -153,7 +153,7 @@ func TestAzureDevOpsFetchAllPaths(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/zip")
-		w.Write(zipData) //nolint:errcheck
+		_, _ = w.Write(zipData)
 	}))
 	defer srv.Close()
 

@@ -56,7 +56,7 @@ func (p *AzureDevOpsProvider) Resolve(ctx context.Context, ref string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("azure devops resolve request: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -102,7 +102,7 @@ func (p *AzureDevOpsProvider) Fetch(ctx context.Context, sha string, paths []str
 	if err != nil {
 		return fmt.Errorf("azure devops fetch request: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

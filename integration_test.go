@@ -136,7 +136,7 @@ func sendNotification(t *testing.T, baseURL string, sessionID string, method str
 		t.Fatalf("sendNotification do: %v", err)
 	}
 	defer resp.Body.Close()
-	io.ReadAll(resp.Body) //nolint:errcheck
+	_, _ = io.ReadAll(resp.Body)
 }
 
 func TestMCPProtocolFlow(t *testing.T) {

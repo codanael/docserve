@@ -151,7 +151,7 @@ func (s *Store) ListLibraries() ([]Library, error) {
 	if err != nil {
 		return nil, fmt.Errorf("list libraries: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
+	defer func() { _ = rows.Close() }()
 
 	var libs []Library
 	for rows.Next() {
@@ -176,7 +176,7 @@ func (s *Store) ReplaceChunks(libraryID int64, chunks []Chunk) error {
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer tx.Rollback() //nolint:errcheck
+	defer func() { _ = tx.Rollback() }()
 
 	// Delete existing chunks for this library from FTS table.
 	if _, err := tx.Exec(`DELETE FROM chunks WHERE library_id = ?`, libraryID); err != nil {
@@ -219,7 +219,7 @@ func (s *Store) FindLibraries(query string) ([]Library, error) {
 	if err != nil {
 		return nil, fmt.Errorf("find libraries: %w", err)
 	}
-	defer rows.Close() //nolint:errcheck
+	defer func() { _ = rows.Close() }()
 
 	var libs []Library
 	for rows.Next() {

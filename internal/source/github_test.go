@@ -103,11 +103,11 @@ func TestGitHubResolve(t *testing.T) {
 		switch r.URL.Path {
 		case "/repos/owner/repo/commits/main":
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"sha": wantSHA}) //nolint:errcheck
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"sha": wantSHA})
 
 		case "/repos/owner/repo/releases/latest":
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]interface{}{"tag_name": wantTag}) //nolint:errcheck
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{"tag_name": wantTag})
 
 		default:
 			http.NotFound(w, r)
@@ -180,7 +180,7 @@ func TestGitHubFetch(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/x-gzip")
-		w.Write(tarball) //nolint:errcheck
+		_, _ = w.Write(tarball)
 	}))
 	defer srv.Close()
 

@@ -64,7 +64,7 @@ func (p *GitHubProvider) Resolve(ctx context.Context, ref string) (string, error
 	if err != nil {
 		return "", fmt.Errorf("github resolve request: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -116,7 +116,7 @@ func (p *GitHubProvider) Fetch(ctx context.Context, sha string, paths []string, 
 	if err != nil {
 		return fmt.Errorf("github fetch request: %w", err)
 	}
-	defer resp.Body.Close() //nolint:errcheck
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -133,7 +133,7 @@ func extractTarGz(r io.Reader, destDir string, paths []string) error {
 	if err != nil {
 		return fmt.Errorf("opening gzip stream: %w", err)
 	}
-	defer gz.Close() //nolint:errcheck
+	defer func() { _ = gz.Close() }()
 
 	tr := tar.NewReader(gz)
 
