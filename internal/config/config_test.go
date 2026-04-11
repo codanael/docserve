@@ -267,6 +267,129 @@ func TestResolveConfigPath(t *testing.T) {
 	})
 }
 
+func TestLoadConfigConfluence(t *testing.T) {
+	depth := 3
+	content := `
+sources:
+  - name: my-confluence-docs
+    provider: confluence
+    base_url: https://confluence.example.com
+    ref: SPACEKEY
+    depth: 3
+    proxy: false
+    schedule: "0 */2 * * *"
+    auth:
+      type: bearer
+      token_env: CONFLUENCE_TOKEN
+`
+	f := writeTempConfig(t, content)
+	cfg, err := config.Load(f)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if len(cfg.Sources) != 1 {
+		t.Fatalf("len(Sources) = %d, want 1", len(cfg.Sources))
+	}
+
+	src := cfg.Sources[0]
+	if src.Name != "my-confluence-docs" {
+		t.Errorf("Name = %q", src.Name)
+	}
+	if src.Provider != "confluence" {
+		t.Errorf("Provider = %q", src.Provider)
+	}
+	if src.BaseURL != "https://confluence.example.com" {
+		t.Errorf("BaseURL = %q", src.BaseURL)
+	}
+	if src.Ref != "SPACEKEY" {
+		t.Errorf("Ref = %q", src.Ref)
+	}
+	if src.Depth == nil {
+		t.Fatal("Depth is nil, want pointer to 3")
+	}
+	if *src.Depth != depth {
+		t.Errorf("Depth = %d, want %d", *src.Depth, depth)
+	}
+	if src.Proxy {
+		t.Errorf("Proxy = true, want false")
+	}
+	// Paths should default to [""] for confluence
+	if len(src.Paths) != 1 || src.Paths[0] != "" {
+		t.Errorf("Paths = %v, want [\"\"]", src.Paths)
+	}
+	// Repo should default to base_url + /pages/ + ref
+	wantRepo := "https://confluence.example.com/pages/SPACEKEY"
+	if src.Repo != wantRepo {
+		t.Errorf("Repo = %q, want %q", src.Repo, wantRepo)
+	}
+	if src.Schedule != "0 */2 * * *" {
+		t.Errorf("Schedule = %q", src.Schedule)
+	}
+	if src.Auth.Type != "bearer" {
+		t.Errorf("Auth.Type = %q", src.Auth.Type)
+	}
+	if src.Auth.TokenEnv != "CONFLUENCE_TOKEN" {
+		t.Errorf("Auth.TokenEnv = %q", src.Auth.TokenEnv)
+	}
+}
+
+func TestLoadConfigConfluenceDepthDefault(t *testing.T) {
+	content := `
+sources:
+  - name: confluence-no-depth
+    provider: confluence
+    base_url: https://confluence.example.com
+    ref: MYSPACE
+`
+	f := writeTempConfig(t, content)
+	cfg, err := config.Load(f)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	src := cfg.Sources[0]
+	if src.Depth != nil {
+		t.Errorf("Depth = %v, want nil (unset)", src.Depth)
+	}
+}
+
+func TestLoadConfigConfluenceValidation(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{
+			name: "confluence missing base_url",
+			content: `
+sources:
+  - name: test
+    provider: confluence
+    ref: SPACEKEY
+`,
+		},
+		{
+			name: "confluence missing ref",
+			content: `
+sources:
+  - name: test
+    provider: confluence
+    base_url: https://confluence.example.com
+`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			f := writeTempConfig(t, tc.content)
+			_, err := config.Load(f)
+			if err == nil {
+				t.Errorf("Load() expected error for case %q, got nil", tc.name)
+			}
+		})
+	}
+}
+
 // writeTempConfig writes content to a temp file and returns its path.
 func writeTempConfig(t *testing.T, content string) string {
 	t.Helper()

@@ -30,6 +30,7 @@ type SourceConfig struct {
 	Project  string     `yaml:"project"`  // Azure DevOps
 	BaseURL  string     `yaml:"base_url"`
 	Ref      string     `yaml:"ref"`
+	Depth    *int       `yaml:"depth"`
 	Proxy    bool       // defaults to true; handled via custom UnmarshalYAML
 	Paths    []string   `yaml:"paths"`
 	Schedule string     `yaml:"schedule"`
@@ -45,6 +46,7 @@ type rawSource struct {
 	Project  string     `yaml:"project"`
 	BaseURL  string     `yaml:"base_url"`
 	Ref      string     `yaml:"ref"`
+	Depth    *int       `yaml:"depth"`
 	Proxy    *bool      `yaml:"proxy"`
 	Paths    []string   `yaml:"paths"`
 	Schedule string     `yaml:"schedule"`
@@ -65,6 +67,7 @@ func (s *SourceConfig) UnmarshalYAML(value *yaml.Node) error {
 	s.Project = raw.Project
 	s.BaseURL = raw.BaseURL
 	s.Ref = raw.Ref
+	s.Depth = raw.Depth
 	s.Paths = raw.Paths
 	s.Schedule = raw.Schedule
 	s.Auth = raw.Auth
@@ -128,15 +131,27 @@ func validate(cfg *Config) error {
 		}
 		switch src.Provider {
 		case "github", "azure-devops":
-			// valid
+			if src.Ref == "" {
+				return fmt.Errorf("source %q: ref is required", src.Name)
+			}
+			if len(src.Paths) == 0 {
+				return fmt.Errorf("source %q: at least one path is required", src.Name)
+			}
+		case "confluence":
+			if src.BaseURL == "" {
+				return fmt.Errorf("source %q: base_url is required for confluence provider", src.Name)
+			}
+			if src.Ref == "" {
+				return fmt.Errorf("source %q: ref is required", src.Name)
+			}
+			if len(src.Paths) == 0 {
+				cfg.Sources[i].Paths = []string{""}
+			}
+			if src.Repo == "" {
+				cfg.Sources[i].Repo = src.BaseURL + "/pages/" + src.Ref
+			}
 		default:
-			return fmt.Errorf("source %q: unknown provider %q (must be github or azure-devops)", src.Name, src.Provider)
-		}
-		if src.Ref == "" {
-			return fmt.Errorf("source %q: ref is required", src.Name)
-		}
-		if len(src.Paths) == 0 {
-			return fmt.Errorf("source %q: at least one path is required", src.Name)
+			return fmt.Errorf("source %q: unknown provider %q (must be github, azure-devops, or confluence)", src.Name, src.Provider)
 		}
 	}
 

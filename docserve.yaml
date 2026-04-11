@@ -1,0 +1,11 @@
+data_dir: ./data
+listen: ":8080"
+
+sources:
+  - name: spring-boot
+    provider: github
+    repo: spring-projects/spring-boot
+    ref: main
+    proxy: false
+    paths:
+      - "documentation/spring-boot-docs/"
