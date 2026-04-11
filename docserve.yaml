@@ -9,3 +9,14 @@ sources:
     proxy: false
     paths:
       - "documentation/spring-boot-docs/"
+
+  # Confluence Data Center example:
+  # - name: team-docs
+  #   provider: confluence
+  #   base_url: https://confluence.example.com
+  #   ref: "123456"        # root page ID
+  #   depth: -1             # unlimited depth
+  #   schedule: "0 */4 * * *"
+  #   auth:
+  #     type: bearer
+  #     token_env: CONFLUENCE_PAT

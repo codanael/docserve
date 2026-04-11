@@ -48,3 +48,23 @@ sources:
   #     type: basic
   #     username_env: ADO_USER
   #     password_env: ADO_PAT
+
+  # Confluence Data Center source example — uses personal access token.
+  # Uncomment and fill in to enable.
+  #
+  # - name: my-confluence-docs
+  #   provider: confluence
+  #   base_url: https://confluence.example.com  # Confluence instance URL
+  #   ref: "123456"              # page ID of the root page to index
+  #   depth: 3                   # subtree depth: 0=root only, -1=unlimited (default)
+  #   proxy: false
+  #   schedule: "0 */4 * * *"
+  #   auth:
+  #     type: bearer
+  #     token_env: CONFLUENCE_PAT  # personal access token (DC 7.9+)
+  #
+  # # Alternative: basic auth (username + password/token)
+  # # auth:
+  # #   type: basic
+  # #   username_env: CONFLUENCE_USER
+  # #   password_env: CONFLUENCE_PASS
