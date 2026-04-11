@@ -176,7 +176,7 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Search
-	results, err := s.Search(libID, "database querying", 10000)
+	results, err := s.SearchDocs(libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search error: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Old search should return no result (or only new content)
-	results2, err := s.Search(libID, "database querying", 10000)
+	results2, err := s.SearchDocs(libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search after replace error: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// New content should be searchable
-	results3, err := s.Search(libID, "new content", 10000)
+	results3, err := s.SearchDocs(libID, "new content", 10000)
 	if err != nil {
 		t.Fatalf("Search for new content error: %v", err)
 	}

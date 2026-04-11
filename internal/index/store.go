@@ -204,41 +204,6 @@ func (s *Store) ReplaceChunks(libraryID int64, chunks []Chunk) error {
 	return tx.Commit()
 }
 
-// Search performs an FTS5 MATCH query with bm25 weights and returns results
-// within the token budget (approximated as len(content)/4 tokens).
-func (s *Store) Search(libraryID int64, query string, maxTokens int) ([]SearchResult, error) {
-	const q = `
-		SELECT path, breadcrumb, content, -bm25(chunks, 0.0, 1.5, 2.0, 1.0) AS score
-		FROM chunks
-		WHERE library_id = ? AND chunks MATCH ?
-		ORDER BY score DESC`
-
-	rows, err := s.db.Query(q, libraryID, query)
-	if err != nil {
-		return nil, fmt.Errorf("fts search: %w", err)
-	}
-	defer rows.Close()
-
-	var results []SearchResult
-	tokensUsed := 0
-	for rows.Next() {
-		var r SearchResult
-		if err := rows.Scan(&r.Path, &r.Breadcrumb, &r.Content, &r.Score); err != nil {
-			return nil, fmt.Errorf("scan search result: %w", err)
-		}
-		tokens := len(r.Content) / 4
-		if tokensUsed+tokens > maxTokens && len(results) > 0 {
-			break
-		}
-		tokensUsed += tokens
-		results = append(results, r)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("search rows: %w", err)
-	}
-	return results, nil
-}
-
 // Ready returns true if the database is accessible and at least one library
 // has been indexed.
 func (s *Store) Ready() bool {
