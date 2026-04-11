@@ -1,0 +1,17 @@
+= Getting Started
+Welcome to the library.
+== Installation
+Run the following command:
+[source,bash]
+----
+mvn install mylib
+----
+== Configuration
+=== Database
+Set the connection string:
+[source,yaml]
+----
+spring.datasource.url: jdbc:postgresql://localhost/mydb
+----
+=== Cache
+Configure Redis endpoint.

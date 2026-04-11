@@ -1,0 +1,9 @@
+= Security Guide
+== Authentication
+Use OAuth2 for authentication.
+NOTE: Always use HTTPS in production.
+TIP: You can configure multiple providers.
+== Authorization
+Role-based access control.
+WARNING: Admin role grants full access.
+IMPORTANT: Review permissions regularly.

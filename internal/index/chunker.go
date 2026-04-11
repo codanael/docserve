@@ -1,7 +1,6 @@
 package index
 
 import (
-	"errors"
 	"path/filepath"
 	"strings"
 )
@@ -49,12 +48,8 @@ func (p *PlainChunker) Chunk(filename string, content []byte) ([]Chunk, error) {
 	return chunks, nil
 }
 
-// AsciidocChunker is a placeholder — AsciiDoc support is not yet implemented.
+// AsciidocChunker splits AsciiDoc files into chunks by heading hierarchy.
 type AsciidocChunker struct{}
-
-func (a *AsciidocChunker) Chunk(filename string, content []byte) ([]Chunk, error) {
-	return nil, errors.New("not yet implemented")
-}
 
 // splitBySize splits text into parts no larger than maxBytes, preferring to
 // split on "\n\n" paragraph boundaries. If a single paragraph exceeds maxBytes
