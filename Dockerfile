@@ -2,6 +2,10 @@ FROM alpine:3 AS certs
 RUN apk add --no-cache ca-certificates
 
 FROM scratch
+
+LABEL org.opencontainers.image.source=https://github.com/codanael/docserve
+LABEL org.opencontainers.image.description="Self-hosted MCP documentation server. Fetches docs from Git providers, indexes with SQLite FTS5, serves to LLM agents via MCP Streamable HTTP."
+LABEL org.opencontainers.image.licenses=MIT
 ARG TARGETPLATFORM
 COPY --from=certs /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY ${TARGETPLATFORM}/docserve /docserve
