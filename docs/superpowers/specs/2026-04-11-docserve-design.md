@@ -2,7 +2,7 @@
 
 ## Overview
 
-A single Go binary that fetches documentation from GitHub repositories, indexes it with full-text search, and serves it to LLM coding agents via the MCP (Model Context Protocol) Streamable HTTP transport.
+A single Go binary that fetches documentation from Git repositories (GitHub, Azure DevOps, GitLab...), indexes it with full-text search, and serves it to LLM coding agents via the MCP (Model Context Protocol) Streamable HTTP transport.
 
 Designed for air-gapped or proxy-restricted environments where coding agents cannot access the internet directly but need up-to-date framework and library documentation.
 
@@ -10,7 +10,7 @@ Designed for air-gapped or proxy-restricted environments where coding agents can
 
 - Serve official documentation (Spring Boot, Angular, internal SDKs...) to LLM agents via MCP
 - Run as a portable Go binary on any Linux server or OpenShift/k8s cluster
-- Fetch docs from GitHub repos through an HTTP proxy
+- Fetch docs from multiple Git providers (GitHub, Azure DevOps, GitLab) with per-source proxy and auth
 - Full-text search (FTS5) with semantic search as a future extension
 - Comply with the MCP Streamable HTTP transport specification (2025-03-26)
 
@@ -52,34 +52,78 @@ data_dir: /var/lib/docserve
 
 listen: ":8080"
 
+# Global HTTP proxy (used when a source has proxy: true)
 proxy:
   http: http://proxy.internal:3128
   https: http://proxy.internal:3128
-  no_proxy: "*.internal,.local"
 
 sources:
+  # GitHub (public or GitHub Enterprise) — via proxy
   - name: spring-boot
-    type: github
+    provider: github
     repo: spring-projects/spring-boot
+    # base_url: https://github.example.com/api/v3  # for GHE
     ref: v3.4.x
+    proxy: true                          # route through global proxy (default)
     paths:
       - "spring-boot-project/spring-boot-docs/src/docs/asciidoc"
     schedule: "0 3 * * 0"
+    auth:
+      token_env: GITHUB_TOKEN            # env var name, never inline
 
   - name: angular
-    type: github
+    provider: github
     repo: angular/angular
     ref: main
+    proxy: true
     paths:
       - "adev/src/content"
+    auth:
+      token_env: GITHUB_TOKEN
 
-  - name: internal-sdk
-    type: github
-    repo: myorg/internal-sdk
+  # Azure DevOps — direct access, no proxy
+  - name: internal-api
+    provider: azure-devops
+    org: myorg
+    project: myproject
+    repo: internal-api
+    base_url: https://dev.azure.com
     ref: main
+    proxy: false                         # direct access, bypass proxy
     paths:
       - "docs/"
+    auth:
+      type: basic
+      username_env: AZURE_USER
+      password_env: AZURE_PAT
+
+  # GitLab — direct access
+  - name: shared-lib
+    provider: gitlab
+    project_id: "42"
+    base_url: https://gitlab.internal
+    ref: main
+    proxy: false
+    paths:
+      - "doc/"
+    auth:
+      type: bearer
+      token_env: GITLAB_TOKEN
 ```
+
+### Proxy routing
+
+Each source declares `proxy: true` (default) or `proxy: false`. Two `http.Client` instances are created at startup: one configured with the global proxy, one without. The provider factory injects the appropriate client.
+
+### Authentication
+
+Credentials are **never** stored in the YAML config. Each auth block references environment variable names. In k8s, these come from Secrets; with systemd, from `EnvironmentFile`.
+
+| Auth type | HTTP header | Providers |
+|-----------|------------|-----------|
+| `token` (default for GitHub) | `Authorization: token <pat>` | GitHub, GHE |
+| `bearer` | `Authorization: Bearer <token>` | GitLab, Azure DevOps OAuth |
+| `basic` | `Authorization: Basic base64(user:pass)` | Azure DevOps PAT, Bitbucket |
 
 ## Architecture
 
@@ -91,9 +135,10 @@ docserve fetch
 | Source       |---->| Content      |---->| Chunker      |---->| SQLite      |
 | Resolver    |     | Fetcher      |     |              |     | Indexer     |
 +-------------+     +--------------+     +--------------+     +-------------+
-  - resolve ref       - tarball download   - split on          - FTS5 insert
-  - compare sha       - via HTTP proxy       headings          - metadata
-  - skip if same      - cache in raw/      - breadcrumbs       - transactional
+  - per-provider       - archive download    - split on          - FTS5 insert
+  - resolve ref          (tar.gz or zip)      headings          - metadata
+  - compare sha       - proxy or direct    - breadcrumbs       - transactional
+  - skip if same      - cache in raw/
 
 docserve serve
       |
@@ -118,27 +163,54 @@ docserve serve
 
 ## Pipeline: Fetch and Indexation
 
-### 1. Source Resolver
+### 1. Provider Interface
 
-Resolves the concrete commit to fetch from the config:
+Each Git hosting provider implements a common interface:
 
-- `ref: v3.4.x` - resolved via GitHub API `GET /repos/:owner/:repo/git/ref/...`
-- `ref: latest` - resolved via `GET /repos/:owner/:repo/releases/latest`
-- `ref: main` - resolved to its current `commit_sha` via `GET /repos/:owner/:repo/commits/:ref` (HEAD only)
+```go
+type Provider interface {
+    // Resolve returns the commit SHA for a given ref
+    Resolve(ctx context.Context, ref string) (string, error)
+
+    // Fetch downloads files matching paths into destDir
+    Fetch(ctx context.Context, sha string, paths []string, destDir string) error
+}
+```
+
+The factory selects the provider and injects the appropriate `http.Client` (proxied or direct):
+
+```go
+func NewProvider(cfg SourceConfig, client *http.Client) (Provider, error)
+```
+
+v1 ships with GitHub and Azure DevOps providers. GitLab is a future addition (same pattern, ~100 lines).
+
+### 2. Source Resolver
+
+Each provider implements `Resolve()` using its own API:
+
+| Provider | Ref resolution |
+|----------|---------------|
+| **GitHub** | `ref: v3.4.x` → `GET /repos/:owner/:repo/git/ref/...` |
+| | `ref: latest` → `GET /repos/:owner/:repo/releases/latest` |
+| | `ref: main` → `GET /repos/:owner/:repo/commits/:ref` (HEAD SHA) |
+| **Azure DevOps** | `GET /{org}/{project}/_apis/git/repositories/{repo}/commits?searchCriteria.itemVersion.version={ref}&$top=1` |
 
 Produces a manifest: `{source, resolved_ref, commit_sha, paths[]}`.
 
 Compares `commit_sha` against the value stored in the database. If identical, skips the fetch entirely (idempotent).
 
-### 2. Content Fetcher
+### 3. Content Fetcher
 
-Primary strategy: **tarball download**.
+Each provider implements `Fetch()` using archive download — a single HTTP call per source:
 
-`GET /repos/:owner/:repo/tarball/:ref` returns the full repo as a `.tar.gz`. We extract only files matching the configured `paths[]` globs. Single HTTP call, efficient.
+| Provider | Archive endpoint | Format |
+|----------|-----------------|--------|
+| **GitHub** | `GET /repos/:owner/:repo/tarball/:ref` | `.tar.gz` |
+| **Azure DevOps** | `GET /{org}/{project}/_apis/git/repositories/{repo}/items?path=/&$format=zip&versionDescriptor.version={ref}` | `.zip` |
+| **GitLab** (future) | `GET /api/v4/projects/:id/repository/archive.tar.gz?sha={ref}` | `.tar.gz` |
 
-Fallback for very large repos: **API tree traversal**. `GET /repos/:owner/:repo/git/trees/:sha?recursive=1` then fetch individual files. Rate-limit aware.
-
-HTTP proxy injected via `http.Transport` on the Go `http.Client`. All traffic goes through the configured proxy.
+After download, only files matching the configured `paths[]` globs are extracted. Both `archive/tar` and `archive/zip` are in the Go stdlib — no additional dependency.
 
 Raw files cached in `data_dir/raw/{source}/{commit_sha}/` to allow re-indexation without re-fetching.
 
@@ -317,9 +389,10 @@ docserve/
 │   │   └── config.go            # YAML parsing, validation, resolution
 │   │
 │   ├── source/
-│   │   ├── resolver.go          # Ref resolution → commit_sha
-│   │   ├── fetcher.go           # Tarball download, extraction
-│   │   └── github.go            # GitHub API client (proxy-aware)
+│   │   ├── provider.go          # Provider interface + factory
+│   │   ├── github.go            # GitHub / GitHub Enterprise provider
+│   │   ├── azuredevops.go       # Azure DevOps provider
+│   │   └── fetcher.go           # Orchestration: resolve → fetch → cache
 │   │
 │   ├── index/
 │   │   ├── chunker.go           # Chunker interface + dispatch
