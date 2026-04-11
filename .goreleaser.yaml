@@ -1,0 +1,59 @@
+version: 2
+
+builds:
+  - id: docserve
+    main: ./cmd/docserve
+    binary: docserve
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: docserve
+    ids:
+      - docserve
+    formats:
+      - tar.gz
+    name_template: "docserve_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "checksums.txt"
+
+signs:
+  - artifacts: checksum
+    cmd: cosign
+    args:
+      - "sign-blob"
+      - "--yes"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+
+dockers:
+  - image_templates:
+      - "ghcr.io/codanael/docserve:{{ .Version }}-amd64"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/amd64"
+    goarch: amd64
+  - image_templates:
+      - "ghcr.io/codanael/docserve:{{ .Version }}-arm64"
+    dockerfile: Dockerfile
+    build_flag_templates:
+      - "--platform=linux/arm64"
+    goarch: arm64
+
+docker_manifests:
+  - name_template: "ghcr.io/codanael/docserve:{{ .Version }}"
+    image_templates:
+      - "ghcr.io/codanael/docserve:{{ .Version }}-amd64"
+      - "ghcr.io/codanael/docserve:{{ .Version }}-arm64"
+  - name_template: "ghcr.io/codanael/docserve:latest"
+    image_templates:
+      - "ghcr.io/codanael/docserve:{{ .Version }}-amd64"
+      - "ghcr.io/codanael/docserve:{{ .Version }}-arm64"
