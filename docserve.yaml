@@ -10,13 +10,23 @@ sources:
     paths:
       - "documentation/spring-boot-docs/"
 
-  # Confluence Data Center example:
-  # - name: team-docs
-  #   provider: confluence
-  #   base_url: https://confluence.example.com
-  #   ref: "123456"        # root page ID
-  #   depth: -1             # unlimited depth
-  #   schedule: "0 */4 * * *"
-  #   auth:
-  #     type: bearer
-  #     token_env: CONFLUENCE_PAT
+  - name: atlassian-confluence-docs
+    provider: confluence
+    base_url: https://confluence.atlassian.com
+    ref: "1627457156"      # Info/Tip/Note/Warning Macros page
+    depth: 0               # root page only
+    proxy: false
+
+  - name: apache-kafka
+    provider: confluence
+    base_url: https://cwiki.apache.org/confluence
+    ref: "50859233"        # Kafka Improvement Proposals
+    depth: 1
+    proxy: false
+
+  - name: apache-flink
+    provider: confluence
+    base_url: https://cwiki.apache.org/confluence
+    ref: "308152924"       # Creating a Flink CDC Release
+    depth: 0
+    proxy: false
