@@ -35,6 +35,12 @@ func TestMCPServerHealthz(t *testing.T) {
 	if w.Body.String() != "ok" {
 		t.Errorf("expected body 'ok', got %q", w.Body.String())
 	}
+	if got := w.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("expected X-Content-Type-Options 'nosniff', got %q", got)
+	}
+	if got := w.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Errorf("expected X-Frame-Options 'DENY', got %q", got)
+	}
 }
 
 func TestMCPServerReadyz(t *testing.T) {

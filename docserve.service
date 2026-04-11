@@ -1,0 +1,32 @@
+[Unit]
+Description=docserve - MCP documentation server
+Documentation=https://github.com/codanael/docserve
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/docserve serve --config /etc/docserve/docserve.yaml
+Restart=on-failure
+RestartSec=5s
+
+# Run as dedicated unprivileged user
+User=docserve
+Group=docserve
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadWritePaths=/var/lib/docserve
+
+# Environment file for credentials (tokens, passwords)
+EnvironmentFile=-/etc/docserve/docserve.env
+
+[Install]
+WantedBy=multi-user.target

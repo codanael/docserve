@@ -87,5 +87,14 @@ func (s *Server) Handler() http.Handler {
 		}
 	})
 
-	return mux
+	return securityHeaders(mux)
+}
+
+// securityHeaders wraps an http.Handler to add standard security headers.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
 }

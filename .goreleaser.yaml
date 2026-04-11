@@ -22,6 +22,35 @@ archives:
       - tar.gz
     name_template: "docserve_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
+nfpms:
+  - id: docserve
+    package_name: docserve
+    file_name_template: "docserve_{{ .Version }}_{{ .Arch }}"
+    vendor: codanael
+    homepage: https://github.com/codanael/docserve
+    maintainer: Anael LATASSA
+    license: MIT
+    description: Self-hosted MCP documentation server
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+    contents:
+      - src: ./docserve.example.yaml
+        dst: /etc/docserve/docserve.example.yaml
+        type: config
+      - src: ./docserve.service
+        dst: /usr/lib/systemd/system/docserve.service
+        type: config
+    scripts:
+      postinstall: packaging/postinstall.sh
+      preremove: packaging/preremove.sh
+
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.sbom.json"
+
 checksum:
   name_template: "checksums.txt"
 
@@ -62,3 +91,20 @@ docker_signs:
       - "${artifact}@${digest}"
       - "--yes"
     output: true
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^style:"
+      - "^chore:"
+  groups:
+    - title: Features
+      regexp: "^.*feat.*:+.*$"
+    - title: Bug Fixes
+      regexp: "^.*fix.*:+.*$"
+    - title: Refactoring
+      regexp: "^.*refactor.*:+.*$"
+    - title: Other
+      order: 999

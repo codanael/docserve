@@ -367,8 +367,11 @@ func (p *ConfluenceProvider) doGet(ctx context.Context, rawURL string) (io.ReadC
 			continue
 		}
 
-		bodyBytes, _ := io.ReadAll(resp.Body)
+		bodyBytes, readErr := io.ReadAll(resp.Body)
 		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, fmt.Errorf("confluence API returned %d (failed to read body: %w)", resp.StatusCode, readErr)
+		}
 		return nil, fmt.Errorf("confluence API returned %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 }

@@ -84,13 +84,6 @@ func (s *Store) migrate() error {
 			content,
 			tokenize='porter unicode61'
 		)`,
-		`CREATE TABLE IF NOT EXISTS chunk_meta (
-			rowid      INTEGER PRIMARY KEY,
-			library_id INTEGER NOT NULL REFERENCES libraries(id),
-			path       TEXT    NOT NULL,
-			breadcrumb TEXT    NOT NULL,
-			byte_size  INTEGER NOT NULL
-		)`,
 	}
 
 	for _, stmt := range stmts {
@@ -170,7 +163,7 @@ func (s *Store) ListLibraries() ([]Library, error) {
 }
 
 // ReplaceChunks transactionally deletes all existing chunks for a library and
-// inserts the new ones into both the FTS5 chunks table and chunk_meta.
+// inserts the new ones into the FTS5 chunks table.
 func (s *Store) ReplaceChunks(libraryID int64, chunks []Chunk) error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -183,21 +176,12 @@ func (s *Store) ReplaceChunks(libraryID int64, chunks []Chunk) error {
 		return fmt.Errorf("delete old chunks: %w", err)
 	}
 
-	// Delete existing chunk_meta for this library.
-	if _, err := tx.Exec(`DELETE FROM chunk_meta WHERE library_id = ?`, libraryID); err != nil {
-		return fmt.Errorf("delete old chunk_meta: %w", err)
-	}
-
 	// Insert new chunks.
 	insertChunk := `INSERT INTO chunks (library_id, path, breadcrumb, content) VALUES (?, ?, ?, ?)`
-	insertMeta := `INSERT INTO chunk_meta (rowid, library_id, path, breadcrumb, byte_size) VALUES (last_insert_rowid(), ?, ?, ?, ?)`
 
 	for _, c := range chunks {
 		if _, err := tx.Exec(insertChunk, libraryID, c.Path, c.Breadcrumb, c.Content); err != nil {
 			return fmt.Errorf("insert chunk %q: %w", c.Path, err)
-		}
-		if _, err := tx.Exec(insertMeta, libraryID, c.Path, c.Breadcrumb, len(c.Content)); err != nil {
-			return fmt.Errorf("insert chunk_meta %q: %w", c.Path, err)
 		}
 	}
 
