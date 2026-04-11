@@ -22,20 +22,20 @@ import (
 
 // confluencePageJSON builds a JSON object matching the Confluence REST API
 // response for a single page.
-func confluencePageJSON(id, title string, version int, ancestorIDs []string, body string) map[string]interface{} {
-	ancestors := make([]map[string]interface{}, len(ancestorIDs))
+func confluencePageJSON(id, title string, version int, ancestorIDs []string, body string) map[string]any {
+	ancestors := make([]map[string]any, len(ancestorIDs))
 	for i, aid := range ancestorIDs {
-		ancestors[i] = map[string]interface{}{"id": aid}
+		ancestors[i] = map[string]any{"id": aid}
 	}
-	pg := map[string]interface{}{
+	pg := map[string]any{
 		"id":        id,
 		"title":     title,
-		"version":   map[string]interface{}{"number": version},
+		"version":   map[string]any{"number": version},
 		"ancestors": ancestors,
 	}
 	if body != "" {
-		pg["body"] = map[string]interface{}{
-			"storage": map[string]interface{}{
+		pg["body"] = map[string]any{
+			"storage": map[string]any{
 				"value": body,
 			},
 		}
@@ -46,7 +46,7 @@ func confluencePageJSON(id, title string, version int, ancestorIDs []string, bod
 // newConfluenceTestServer creates an httptest server that serves fake
 // Confluence REST API responses. pages maps page ID to its JSON object.
 // searchResults is the flat list of descendant pages returned for CQL search.
-func newConfluenceTestServer(t *testing.T, pages map[string]map[string]interface{}, searchResults []map[string]interface{}) *httptest.Server {
+func newConfluenceTestServer(t *testing.T, pages map[string]map[string]any, searchResults []map[string]any) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -66,7 +66,7 @@ func newConfluenceTestServer(t *testing.T, pages map[string]map[string]interface
 
 		// Search endpoint: /rest/api/content/search
 		if r.URL.Path == "/rest/api/content/search" {
-			envelope := map[string]interface{}{
+			envelope := map[string]any{
 				"results": searchResults,
 				"start":   0,
 				"limit":   200,
@@ -106,11 +106,11 @@ func TestConfluenceResolveStableHash(t *testing.T) {
 	root := confluencePageJSON("100", "Root", 5, nil, "")
 	child := confluencePageJSON("200", "Child", 3, []string{"100"}, "")
 
-	pages := map[string]map[string]interface{}{
+	pages := map[string]map[string]any{
 		"100": root,
 		"200": child,
 	}
-	searchResults := []map[string]interface{}{child}
+	searchResults := []map[string]any{child}
 
 	srv := newConfluenceTestServer(t, pages, searchResults)
 	defer srv.Close()
@@ -143,8 +143,8 @@ func TestConfluenceResolveHashChangesOnVersionBump(t *testing.T) {
 	childV3 := confluencePageJSON("200", "Child", 3, []string{"100"}, "")
 	childV4 := confluencePageJSON("200", "Child", 4, []string{"100"}, "")
 
-	pages1 := map[string]map[string]interface{}{"100": root, "200": childV3}
-	search1 := []map[string]interface{}{childV3}
+	pages1 := map[string]map[string]any{"100": root, "200": childV3}
+	search1 := []map[string]any{childV3}
 	srv1 := newConfluenceTestServer(t, pages1, search1)
 	defer srv1.Close()
 
@@ -154,8 +154,8 @@ func TestConfluenceResolveHashChangesOnVersionBump(t *testing.T) {
 		t.Fatalf("Resolve v3: %v", err)
 	}
 
-	pages2 := map[string]map[string]interface{}{"100": root, "200": childV4}
-	search2 := []map[string]interface{}{childV4}
+	pages2 := map[string]map[string]any{"100": root, "200": childV4}
+	search2 := []map[string]any{childV4}
 	srv2 := newConfluenceTestServer(t, pages2, search2)
 	defer srv2.Close()
 
@@ -179,12 +179,12 @@ func TestConfluenceResolveDepthFilter(t *testing.T) {
 	child := confluencePageJSON("200", "Child", 1, []string{"100"}, "")
 	grandchild := confluencePageJSON("300", "Grandchild", 1, []string{"100", "200"}, "")
 
-	pages := map[string]map[string]interface{}{
+	pages := map[string]map[string]any{
 		"100": root,
 		"200": child,
 		"300": grandchild,
 	}
-	searchResults := []map[string]interface{}{child, grandchild}
+	searchResults := []map[string]any{child, grandchild}
 
 	srv := newConfluenceTestServer(t, pages, searchResults)
 	defer srv.Close()
@@ -221,12 +221,12 @@ func TestConfluenceFetch(t *testing.T) {
 	child := confluencePageJSON("200", "Backend", 1, []string{"100"}, backendBody)
 	grandchild := confluencePageJSON("300", "API REST", 1, []string{"100", "200"}, apiBody)
 
-	pages := map[string]map[string]interface{}{
+	pages := map[string]map[string]any{
 		"100": root,
 		"200": child,
 		"300": grandchild,
 	}
-	searchResults := []map[string]interface{}{child, grandchild}
+	searchResults := []map[string]any{child, grandchild}
 
 	srv := newConfluenceTestServer(t, pages, searchResults)
 	defer srv.Close()
@@ -264,8 +264,8 @@ func TestConfluenceFetchSanitizesTitles(t *testing.T) {
 	rootBody := `<p>Content</p>`
 	root := confluencePageJSON("100", "Docs: A/B Test", 1, nil, rootBody)
 
-	pages := map[string]map[string]interface{}{"100": root}
-	var searchResults []map[string]interface{}
+	pages := map[string]map[string]any{"100": root}
+	var searchResults []map[string]any
 
 	srv := newConfluenceTestServer(t, pages, searchResults)
 	defer srv.Close()
@@ -324,8 +324,8 @@ func TestConfluenceFetchRetryOn503(t *testing.T) {
 
 		// Search endpoint: no descendants
 		if r.URL.Path == "/rest/api/content/search" {
-			json.NewEncoder(w).Encode(map[string]interface{}{
-				"results": []interface{}{},
+			json.NewEncoder(w).Encode(map[string]any{
+				"results": []any{},
 				"start":   0,
 				"limit":   200,
 				"size":    0,
