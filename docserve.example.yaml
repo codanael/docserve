@@ -1,0 +1,50 @@
+# docserve example configuration
+# Copy to docserve.yaml and adjust to your environment.
+
+# Directory where fetched documentation is stored.
+# Defaults to "data" relative to the working directory.
+data_dir: /var/lib/docserve
+
+# Address on which the server listens.
+# Defaults to ":8080".
+listen: ":8080"
+
+# Optional HTTP/HTTPS proxy used when fetching sources.
+# Individual sources can opt out by setting proxy: false.
+proxy:
+  http: http://proxy.example.com:3128
+  https: http://proxy.example.com:3128
+
+sources:
+  # GitHub source example — uses bearer token auth via GITHUB_TOKEN env var.
+  - name: my-github-docs
+    provider: github
+    repo: myorg/myrepo        # owner/repo
+    ref: main                 # branch, tag, or commit SHA
+    proxy: true               # use the global proxy (this is the default)
+    paths:
+      - docs/                 # directory (trailing slash) or exact file path
+      - README.md
+    schedule: "0 * * * *"    # cron expression; omit to disable scheduled sync
+    auth:
+      type: bearer
+      token_env: GITHUB_TOKEN # name of the environment variable holding the token
+
+  # Azure DevOps source example — uses basic auth.
+  # Uncomment and fill in to enable.
+  #
+  # - name: my-azure-docs
+  #   provider: azure-devops
+  #   org: myorg              # Azure DevOps organisation
+  #   project: myproject      # Azure DevOps project
+  #   repo: myrepo            # Git repository name
+  #   base_url: https://dev.azure.com
+  #   ref: refs/heads/main
+  #   proxy: false            # bypass the global proxy for this source
+  #   paths:
+  #     - wiki/
+  #   schedule: "30 * * * *"
+  #   auth:
+  #     type: basic
+  #     username_env: ADO_USER
+  #     password_env: ADO_PAT
