@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/codanael/docserve/raw/main/docserve.schema.json",
+  "title": "docserve configuration",
+  "description": "Configuration file for docserve, a self-hosted MCP documentation server.",
+  "type": "object",
+  "required": ["providers"],
+  "additionalProperties": false,
+  "properties": {
+    "data_dir": {
+      "type": "string",
+      "description": "Directory where fetched documentation and the SQLite index are stored. Defaults to \"data\" relative to the working directory."
+    },
+    "listen": {
+      "type": "string",
+      "description": "Address on which the MCP server listens. Defaults to \":8080\".",
+      "examples": [":8080", "127.0.0.1:9090"]
+    },
+    "proxy": {
+      "$ref": "#/$defs/ProxyConfig"
+    },
+    "providers": {
+      "type": "array",
+      "description": "List of documentation providers to fetch from.",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/ProviderConfig"
+      }
+    }
+  },
+  "$defs": {
+    "ProxyConfig": {
+      "type": "object",
+      "description": "Global HTTP/HTTPS proxy settings. Individual providers can opt out with proxy: false.",
+      "additionalProperties": false,
+      "properties": {
+        "http": {
+          "type": "string",
+          "description": "HTTP proxy URL.",
+          "format": "uri"
+        },
+        "https": {
+          "type": "string",
+          "description": "HTTPS proxy URL.",
+          "format": "uri"
+        }
+      }
+    },
+    "AuthConfig": {
+      "type": "object",
+      "description": "Authentication configuration. Credentials are read from environment variables, never stored in the config file.",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["basic", "bearer"],
+          "description": "Authentication type."
+        },
+        "token_env": {
+          "type": "string",
+          "description": "Name of the environment variable holding the bearer token."
+        },
+        "username_env": {
+          "type": "string",
+          "description": "Name of the environment variable holding the username (basic auth)."
+        },
+        "password_env": {
+          "type": "string",
+          "description": "Name of the environment variable holding the password or PAT (basic auth)."
+        }
+      }
+    },
+    "RefConfig": {
+      "type": "object",
+      "description": "A Git ref (branch, tag, or SHA) to index from a repository.",
+      "required": ["ref"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "type": "string",
+          "description": "Branch name, tag, or commit SHA."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional override for the library name derived from this ref."
+        },
+        "paths": {
+          "type": "array",
+          "description": "Directories (trailing slash) or file paths to index within the ref.",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "RepoConfig": {
+      "type": "object",
+      "description": "A Git repository to index.",
+      "required": ["name", "slug"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Unique name for this repository source."
+        },
+        "slug": {
+          "type": "string",
+          "description": "Repository identifier. For GitHub: owner/repo. For Azure DevOps: repository name."
+        },
+        "project": {
+          "type": "string",
+          "description": "Azure DevOps project name. Only used with azure-devops provider."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Cron expression overriding the provider-level schedule for this repo."
+        },
+        "auth": {
+          "$ref": "#/$defs/AuthConfig",
+          "description": "Auth overriding the provider-level auth for this repo."
+        },
+        "refs": {
+          "type": "array",
+          "description": "List of refs to index from this repository.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/RefConfig"
+          }
+        }
+      }
+    },
+    "PageConfig": {
+      "type": "object",
+      "description": "A Confluence page to index, optionally including its descendants.",
+      "required": ["space", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "space": {
+          "type": "string",
+          "description": "Confluence space key."
+        },
+        "id": {
+          "type": "string",
+          "description": "Confluence page ID."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional override for the library name."
+        },
+        "depth": {
+          "type": "integer",
+          "description": "Subtree depth to index. 0 = root page only, -1 = unlimited (default)."
+        }
+      }
+    },
+    "ProviderConfig": {
+      "type": "object",
+      "description": "A documentation provider configuration.",
+      "required": ["type"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["github", "azure-devops", "confluence"],
+          "description": "Provider type."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Base URL for the provider instance. Required for azure-devops and confluence.",
+          "format": "uri"
+        },
+        "proxy": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to route requests through the global proxy. Defaults to true."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "Default cron expression for periodic sync of all sources under this provider."
+        },
+        "auth": {
+          "$ref": "#/$defs/AuthConfig",
+          "description": "Default authentication for all sources under this provider."
+        },
+        "repos": {
+          "type": "array",
+          "description": "List of repositories to index. Used by github and azure-devops providers.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/RepoConfig"
+          }
+        },
+        "pages": {
+          "type": "array",
+          "description": "List of Confluence pages to index. Used by the confluence provider.",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/PageConfig"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "type": { "const": "github" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["repos"],
+            "properties": {
+              "pages": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "azure-devops" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["base_url", "repos"],
+            "properties": {
+              "pages": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": { "type": { "const": "confluence" } },
+            "required": ["type"]
+          },
+          "then": {
+            "required": ["base_url", "pages"],
+            "properties": {
+              "repos": false
+            }
+          }
+        }
+      ]
+    }
+  }
+}

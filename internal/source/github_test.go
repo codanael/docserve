@@ -118,9 +118,9 @@ func TestGitHubResolve(t *testing.T) {
 	// Set token in env.
 	t.Setenv("GITHUB_TOKEN", wantToken)
 
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "github",
-		Repo:     "owner/repo",
+		Slug:     "owner/repo",
 		Auth: config.AuthConfig{
 			TokenEnv: "GITHUB_TOKEN",
 		},
@@ -186,9 +186,9 @@ func TestGitHubFetch(t *testing.T) {
 
 	t.Setenv("FETCH_TOKEN", wantToken)
 
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "github",
-		Repo:     "owner/myrepo",
+		Slug:     "owner/myrepo",
 		Auth: config.AuthConfig{
 			TokenEnv: "FETCH_TOKEN",
 		},

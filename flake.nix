@@ -34,6 +34,7 @@
             pkgs.gotools
             pkgs.golangci-lint
             pkgs.goreleaser
+            pkgs.cosign
 
             # SQLite (debug build)
             pkgs.sqlite

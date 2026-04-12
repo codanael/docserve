@@ -44,7 +44,7 @@ func TestAzureDevOpsResolve(t *testing.T) {
 		}
 
 		// Verify URL contains expected path segments.
-		if r.URL.Path != "/myorg/myproject/_apis/git/repositories/myrepo/commits" {
+		if r.URL.Path != "/myproject/_apis/git/repositories/myrepo/commits" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.URL.Query().Get("searchCriteria.itemVersion.version") != "main" {
@@ -66,11 +66,11 @@ func TestAzureDevOpsResolve(t *testing.T) {
 	t.Setenv("AZDO_USERNAME", "user")
 	t.Setenv("AZDO_PASSWORD", "pat")
 
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "azure-devops",
-		Org:      "myorg",
+		BaseURL:  srv.URL,
 		Project:  "myproject",
-		Repo:     "myrepo",
+		Slug:     "myrepo",
 		Auth: config.AuthConfig{
 			Type:        "basic",
 			UsernameEnv: "AZDO_USERNAME",
@@ -79,7 +79,6 @@ func TestAzureDevOpsResolve(t *testing.T) {
 	}
 
 	p := NewAzureDevOpsProvider(cfg, &http.Client{})
-	p.apiURL = srv.URL
 
 	sha, err := p.Resolve(t.Context(), "main")
 	if err != nil {
@@ -100,7 +99,7 @@ func TestAzureDevOpsFetch(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Verify URL path and query.
-		if r.URL.Path != "/myorg/myproject/_apis/git/repositories/myrepo/items" {
+		if r.URL.Path != "/myproject/_apis/git/repositories/myrepo/items" {
 			t.Errorf("unexpected path: %s", r.URL.Path)
 		}
 		if r.URL.Query().Get("versionDescriptor.version") != "deadbeef" {
@@ -112,15 +111,14 @@ func TestAzureDevOpsFetch(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "azure-devops",
-		Org:      "myorg",
+		BaseURL:  srv.URL,
 		Project:  "myproject",
-		Repo:     "myrepo",
+		Slug:     "myrepo",
 	}
 
 	p := NewAzureDevOpsProvider(cfg, &http.Client{})
-	p.apiURL = srv.URL
 
 	destDir := t.TempDir()
 
@@ -157,15 +155,14 @@ func TestAzureDevOpsFetchAllPaths(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "azure-devops",
-		Org:      "myorg",
+		BaseURL:  srv.URL,
 		Project:  "myproject",
-		Repo:     "myrepo",
+		Slug:     "myrepo",
 	}
 
 	p := NewAzureDevOpsProvider(cfg, &http.Client{})
-	p.apiURL = srv.URL
 
 	destDir := t.TempDir()
 

@@ -34,12 +34,12 @@ func NewFetcher(store *index.Store, dataDir string) *Fetcher {
 	return &Fetcher{store: store, dataDir: dataDir}
 }
 
-// FetchSource executes the full fetch pipeline for a single source+ref.
-func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, ref config.RefConfig, libName string, prov Provider) (*FetchResult, error) {
+// FetchSource executes the full fetch pipeline for a single source+ref (or source+page for confluence).
+func (f *Fetcher) FetchSource(ctx context.Context, cfg config.ResolvedSource, ref config.RefConfig, page config.PageConfig, libName string, prov Provider) (*FetchResult, error) {
 	// Determine the reference identifier based on provider type.
 	resolveRef := ref.Ref
 	if cfg.Provider == "confluence" {
-		resolveRef = ref.ID
+		resolveRef = page.ID
 	}
 
 	// Step 1: resolve ref → SHA.
@@ -131,14 +131,14 @@ func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, ref 
 	}
 	refLabel := ref.Ref
 	if cfg.Provider == "confluence" {
-		refLabel = ref.Space + "/" + ref.ID
+		refLabel = page.Space + "/" + page.ID
 	}
 	refStr := refLabel + "@" + shortSHA
 
 	// Determine repo for the library record.
-	repo := cfg.Repo
+	repo := cfg.Slug
 	if cfg.Provider == "confluence" {
-		repo = cfg.BaseURL + "/spaces/" + ref.Space + "/pages/" + ref.ID
+		repo = cfg.BaseURL + "/spaces/" + page.Space + "/pages/" + page.ID
 	}
 
 	// Step 6: upsert library then replace chunks.

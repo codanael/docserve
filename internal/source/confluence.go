@@ -24,11 +24,11 @@ var sleepFunc = time.Sleep
 
 // ConfluenceProvider fetches documentation from a Confluence instance.
 type ConfluenceProvider struct {
-	cfg    config.SourceConfig
-	ref    config.RefConfig
+	cfg    config.ResolvedSource
+	page   config.PageConfig
 	client *http.Client
 	apiURL string // base URL trimmed of trailing slash
-	depth  int    // -1 = unlimited, from ref.Depth (nil→-1)
+	depth  int    // -1 = unlimited, from page.Depth (nil→-1)
 }
 
 // confluencePage holds the metadata (and optionally body) for a single page.
@@ -41,20 +41,20 @@ type confluencePage struct {
 }
 
 // NewConfluenceProvider constructs a ConfluenceProvider with authentication applied.
-func NewConfluenceProvider(cfg config.SourceConfig, ref config.RefConfig, client *http.Client) *ConfluenceProvider {
+func NewConfluenceProvider(cfg config.ResolvedSource, page config.PageConfig, client *http.Client) *ConfluenceProvider {
 	if client == nil {
 		client = &http.Client{}
 	}
 	client = WrapClientAuth(client, cfg.Auth)
 
 	depth := -1
-	if ref.Depth != nil {
-		depth = *ref.Depth
+	if page.Depth != nil {
+		depth = *page.Depth
 	}
 
 	return &ConfluenceProvider{
 		cfg:    cfg,
-		ref:    ref,
+		page:   page,
 		client: client,
 		apiURL: strings.TrimRight(cfg.BaseURL, "/"),
 		depth:  depth,
@@ -95,7 +95,7 @@ func (p *ConfluenceProvider) Resolve(ctx context.Context, ref string) (string, e
 // Fetch re-fetches the page tree with body content and writes each page as
 // a markdown file under destDir.
 func (p *ConfluenceProvider) Fetch(ctx context.Context, _ string, _ []string, destDir string) error {
-	ref := p.ref.ID
+	ref := p.page.ID
 
 	root, err := p.fetchPage(ctx, ref, true)
 	if err != nil {
