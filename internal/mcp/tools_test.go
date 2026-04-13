@@ -77,29 +77,30 @@ func TestListLibraries(t *testing.T) {
 		t.Fatalf("unexpected error")
 	}
 
-	// Verify structuredContent is set.
+	// Verify structuredContent is set and is a record (not an array).
 	if result.StructuredContent == nil {
 		t.Fatal("expected structuredContent to be set")
 	}
-	entries, ok := result.StructuredContent.([]libEntry)
+	wrapped, ok := result.StructuredContent.(listLibrariesResult)
 	if !ok {
-		t.Fatalf("structuredContent type = %T, want []libEntry", result.StructuredContent)
+		t.Fatalf("structuredContent type = %T, want listLibrariesResult", result.StructuredContent)
 	}
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(entries))
+	if len(wrapped.Libraries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(wrapped.Libraries))
 	}
-	if entries[0].Name != "angular" {
-		t.Errorf("first entry name = %q, want angular", entries[0].Name)
+	if wrapped.Libraries[0].Name != "angular" {
+		t.Errorf("first entry name = %q, want angular", wrapped.Libraries[0].Name)
 	}
 
-	// Verify text fallback is valid JSON.
+	// Verify text fallback is valid JSON object with "libraries" key.
 	text := result.Content[0].(mcplib.TextContent).Text
-	var fallback []map[string]any
+	var fallback map[string]any
 	if err := json.Unmarshal([]byte(text), &fallback); err != nil {
 		t.Fatalf("text fallback is not valid JSON: %v", err)
 	}
-	if len(fallback) != 2 {
-		t.Errorf("text fallback has %d entries, want 2", len(fallback))
+	libs, ok := fallback["libraries"].([]any)
+	if !ok || len(libs) != 2 {
+		t.Errorf("text fallback libraries count wrong, got %v", fallback)
 	}
 }
 

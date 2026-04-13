@@ -121,12 +121,37 @@ func TestBuildFTSQuery(t *testing.T) {
 		{"single", "single"},
 		{"  spaced  words  ", "spaced OR words"},
 		{"", ""},
+		{"e.g. configuration", "eg OR configuration"},
+		{"v3.2.0", "v320"},
+		{"query with (parens)", "query OR with OR parens"},
+		{"dots.in.words special*chars", "dotsinwords OR specialchars"},
+		{`"quoted" terms`, "quoted OR terms"},
+		{"...", ""},
+		{"hello --- world", "hello OR world"},
+		{"colon:separated", "colonseparated"},
 	}
 
 	for _, tc := range tests {
 		got := buildFTSQuery(tc.input)
 		if got != tc.want {
 			t.Errorf("buildFTSQuery(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}
+
+func TestSearchSpecialCharacters(t *testing.T) {
+	s, libID := testLibrary(t)
+	chunks := []Chunk{
+		{Path: "docs/intro.md", Breadcrumb: "Introduction", Content: "Welcome to version 3.2 of the library."},
+	}
+	if err := s.ReplaceChunks(libID, chunks); err != nil {
+		t.Fatalf("ReplaceChunks error: %v", err)
+	}
+	// These queries previously caused FTS5 parse errors.
+	for _, q := range []string{"v3.2", "e.g.", "(test)", `"quoted"`, "...", "hello-world"} {
+		_, err := s.SearchDocs(libID, q, 10000)
+		if err != nil {
+			t.Errorf("SearchDocs(%q) unexpected error: %v", q, err)
 		}
 	}
 }

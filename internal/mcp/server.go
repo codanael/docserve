@@ -29,7 +29,7 @@ func NewServer(store *index.Store, version string) *Server {
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("list-libraries",
-			mcplib.WithDescription("List all indexed documentation libraries"),
+			mcplib.WithDescription("List all indexed documentation libraries. Returns each library's exact name and git ref (branch/tag). Use the exact name from this list when calling get-library-docs."),
 			readOnly, notDestructive, idempotent,
 		),
 		handlers.ListLibraries,
@@ -37,8 +37,8 @@ func NewServer(store *index.Store, version string) *Server {
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("resolve-library",
-			mcplib.WithDescription("Resolve a library by name query, returning the first match"),
-			mcplib.WithString("query", mcplib.Required(), mcplib.Description("The library name query to search for")),
+			mcplib.WithDescription("Resolve a library by fuzzy name query, returning the best match with its exact name and ref. Use this to find the correct library name before calling get-library-docs."),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("A partial or fuzzy library name to search for (e.g. 'spring', 'angular')")),
 			readOnly, notDestructive, idempotent,
 		),
 		handlers.ResolveLibrary,
@@ -46,9 +46,9 @@ func NewServer(store *index.Store, version string) *Server {
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("get-library-docs",
-			mcplib.WithDescription("Search a library's documentation and return matching content"),
-			mcplib.WithString("library", mcplib.Required(), mcplib.Description("The library name to search")),
-			mcplib.WithString("query", mcplib.Required(), mcplib.Description("The search query")),
+			mcplib.WithDescription("Search a library's indexed documentation by keyword query. The 'library' parameter must be the exact library name as returned by list-libraries or resolve-library. If unsure of the exact name, call resolve-library first."),
+			mcplib.WithString("library", mcplib.Required(), mcplib.Description("Exact library name as returned by list-libraries or resolve-library (e.g. 'spring-boot'). Must match exactly.")),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("Keywords to search for in the documentation (e.g. 'health endpoint', 'routing'). Plain text, no special syntax needed.")),
 			mcplib.WithNumber("max_tokens", mcplib.Description("Maximum token budget for results (default 5000)")),
 			readOnly, notDestructive, idempotent,
 		),

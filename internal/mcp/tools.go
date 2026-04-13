@@ -35,6 +35,10 @@ type libEntry struct {
 	FetchedAt string `json:"fetched_at"`
 }
 
+type listLibrariesResult struct {
+	Libraries []libEntry `json:"libraries"`
+}
+
 // ListLibraries returns all indexed libraries.
 func (h *ToolHandlers) ListLibraries(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 	libs, err := h.Store.ListLibraries()
@@ -51,7 +55,7 @@ func (h *ToolHandlers) ListLibraries(ctx context.Context, req mcplib.CallToolReq
 		})
 	}
 
-	result, err := structuredResult(entries)
+	result, err := structuredResult(listLibrariesResult{Libraries: entries})
 	if err != nil {
 		return mcplib.NewToolResultError(err.Error()), nil
 	}

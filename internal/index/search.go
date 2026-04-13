@@ -3,17 +3,39 @@ package index
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
+// sanitizeFTSWord strips characters that are not safe for FTS5 queries,
+// keeping only letters, digits, and underscores.
+func sanitizeFTSWord(word string) string {
+	var b strings.Builder
+	for _, r := range word {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
 // buildFTSQuery transforms a plain text query into an FTS5 OR query.
+// Each word is sanitized to remove FTS5 special characters (., *, ", etc.).
 // "database configuration" → "database OR configuration"
-// Empty input returns "".
+// "e.g. config" → "eg OR config"
+// Empty or all-special input returns "".
 func buildFTSQuery(input string) string {
 	words := strings.Fields(input)
-	if len(words) == 0 {
+	var clean []string
+	for _, w := range words {
+		s := sanitizeFTSWord(w)
+		if s != "" {
+			clean = append(clean, s)
+		}
+	}
+	if len(clean) == 0 {
 		return ""
 	}
-	return strings.Join(words, " OR ")
+	return strings.Join(clean, " OR ")
 }
 
 // SearchDocs performs an FTS5 search using BM25 ranking and returns results
