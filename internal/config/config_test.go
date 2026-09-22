@@ -680,6 +680,77 @@ func TestResolveConfigPath(t *testing.T) {
 	})
 }
 
+func TestLoadConfigAllowedOrigins(t *testing.T) {
+	content := `
+allowed_origins:
+  - https://app.example.com
+  - http://intranet:3000
+  - https://trailing.example.com/
+providers:
+  - type: github
+    repos:
+      - name: s
+        slug: org/repo
+        refs:
+          - ref: main
+            paths: ["docs/"]
+`
+	cfg, err := config.Load(writeTempConfig(t, content))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.AllowedOrigins) != 3 || cfg.AllowedOrigins[0] != "https://app.example.com" {
+		t.Errorf("AllowedOrigins = %v", cfg.AllowedOrigins)
+	}
+	if cfg.AllowedOrigins[2] != "https://trailing.example.com" {
+		t.Errorf("AllowedOrigins[2] = %q, want https://trailing.example.com (trailing slash trimmed)", cfg.AllowedOrigins[2])
+	}
+
+	bad := `
+allowed_origins: ["app.example.com"]
+providers:
+  - type: github
+    repos:
+      - name: s
+        slug: org/repo
+        refs:
+          - ref: main
+            paths: ["docs/"]
+`
+	if _, err := config.Load(writeTempConfig(t, bad)); err == nil {
+		t.Error("expected error for origin without scheme")
+	}
+}
+
+func TestLoadConfigAuthToken(t *testing.T) {
+	content := `
+auth_token_env: DOCSERVE_TEST_TOKEN
+providers:
+  - type: github
+    repos:
+      - name: s
+        slug: org/repo
+        refs:
+          - ref: main
+            paths: ["docs/"]
+`
+	f := writeTempConfig(t, content)
+
+	t.Setenv("DOCSERVE_TEST_TOKEN", "")
+	if _, err := config.Load(f); err == nil {
+		t.Error("expected error when auth_token_env variable is empty")
+	}
+
+	t.Setenv("DOCSERVE_TEST_TOKEN", "abc")
+	cfg, err := config.Load(f)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AuthToken != "abc" {
+		t.Errorf("AuthToken = %q, want abc", cfg.AuthToken)
+	}
+}
+
 // writeTempConfig writes content to a temp file and returns its path.
 func writeTempConfig(t *testing.T, content string) string {
 	t.Helper()

@@ -188,11 +188,22 @@ func cmdServe(args []string) {
 	}
 	sched.Start()
 
-	srv := mcpsrv.NewServer(store, version)
+	if cfg.AuthToken == "" {
+		log.Printf("warning: no auth_token_env configured; the /mcp endpoint accepts unauthenticated requests")
+	}
+	srv := mcpsrv.NewServer(store, version, mcpsrv.Options{
+		AllowedOrigins: cfg.AllowedOrigins,
+		AuthToken:      cfg.AuthToken,
+	})
 
 	httpSrv := &http.Server{
-		Addr:    cfg.Listen,
-		Handler: srv.Handler(),
+		Addr:              cfg.Listen,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+		// WriteTimeout stays 0: SSE responses may be long-lived.
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -320,7 +331,7 @@ func cmdList(args []string) {
 	store := openStore(cfg)
 	defer store.Close() //nolint:errcheck
 
-	libs, err := store.ListLibraries()
+	libs, err := store.ListLibraries(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error listing libraries: %v\n", err)
 		os.Exit(1)
@@ -379,24 +390,24 @@ func cmdSearch(args []string) {
 	store := openStore(cfg)
 	defer store.Close() //nolint:errcheck
 
-	lib, err := store.GetLibrary(libraryName)
+	lib, err := store.GetLibrary(context.Background(), libraryName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	results, err := store.SearchDocs(lib.ID, query, *maxTokens)
+	out, err := store.SearchDocs(context.Background(), lib.ID, query, *maxTokens)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error searching: %v\n", err)
 		os.Exit(1)
 	}
 
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		fmt.Printf("No results for %q in library %q.\n", query, libraryName)
 		return
 	}
 
-	for i, r := range results {
+	for i, r := range out.Results {
 		fmt.Printf("--- Result %d: %s", i+1, r.Path)
 		if r.Breadcrumb != "" {
 			fmt.Printf(" (%s)", r.Breadcrumb)
@@ -404,6 +415,9 @@ func cmdSearch(args []string) {
 		fmt.Println()
 		fmt.Println(r.Content)
 		fmt.Println()
+	}
+	if out.Truncated {
+		fmt.Println("(more results omitted; refine the query or raise --max-tokens)")
 	}
 }
 

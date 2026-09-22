@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	}
 
 	// Get
-	got, err := s.GetLibrary("mylib")
+	got, err := s.GetLibrary(context.Background(), "mylib")
 	if err != nil {
 		t.Fatalf("GetLibrary error: %v", err)
 	}
@@ -69,7 +70,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 		t.Errorf("updated id should match original: got %d want %d", id2, id)
 	}
 
-	got2, err := s.GetLibrary("mylib")
+	got2, err := s.GetLibrary(context.Background(), "mylib")
 	if err != nil {
 		t.Fatalf("GetLibrary after update error: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	}
 
 	// List
-	libs, err := s.ListLibraries()
+	libs, err := s.ListLibraries(context.Background())
 	if err != nil {
 		t.Fatalf("ListLibraries error: %v", err)
 	}
@@ -110,13 +111,13 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	}
 
 	// GetLibrary for non-existent
-	_, err = s.GetLibrary("doesnotexist")
+	_, err = s.GetLibrary(context.Background(), "doesnotexist")
 	if err == nil {
 		t.Error("expected error for non-existent library, got nil")
 	}
 
 	// FindLibraries
-	found, err := s.FindLibraries("another")
+	found, err := s.FindLibraries(context.Background(), "another")
 	if err != nil {
 		t.Fatalf("FindLibraries error: %v", err)
 	}
@@ -124,12 +125,46 @@ func TestStoreLibraryCRUD(t *testing.T) {
 		t.Errorf("FindLibraries: expected [anotherlib], got %v", found)
 	}
 
-	found2, err := s.FindLibraries("lib")
+	found2, err := s.FindLibraries(context.Background(), "lib")
 	if err != nil {
 		t.Fatalf("FindLibraries 'lib' error: %v", err)
 	}
 	if len(found2) != 2 {
 		t.Errorf("FindLibraries 'lib': expected 2 results, got %d", len(found2))
+	}
+}
+
+func TestFindLibrariesEscapesWildcards(t *testing.T) {
+	s, err := OpenStore(":memory:")
+	if err != nil {
+		t.Fatalf("OpenStore error: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	for _, name := range []string{"angular", "spring-boot", "my_lib"} {
+		if _, err := s.UpsertLibrary(Library{Name: name, Repo: "r/" + name, Ref: "main", CommitSHA: "x", FetchedAt: time.Now().UTC()}); err != nil {
+			t.Fatalf("UpsertLibrary %s: %v", name, err)
+		}
+	}
+
+	cases := []struct {
+		query string
+		want  int
+	}{
+		{"%", 0},      // literal percent matches nothing
+		{"_ng", 0},    // underscore is not a single-char wildcard
+		{"my_lib", 1}, // literal underscore still matches
+		{"ng", 2},     // plain substring works ("angular" and "spring-boot" both contain "ng")
+		{"", 3},       // empty query matches everything
+	}
+	for _, tc := range cases {
+		libs, err := s.FindLibraries(context.Background(), tc.query)
+		if err != nil {
+			t.Fatalf("FindLibraries(%q) error: %v", tc.query, err)
+		}
+		if len(libs) != tc.want {
+			t.Errorf("FindLibraries(%q) = %d libraries, want %d", tc.query, len(libs), tc.want)
+		}
 	}
 }
 
@@ -176,25 +211,25 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Search
-	results, err := s.SearchDocs(libID, "database querying", 10000)
+	out, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search error: %v", err)
 	}
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		t.Error("expected search results, got none")
 	}
 	// Top result should be api.md since it talks about querying
-	if results[0].Path != "docs/api.md" {
-		t.Logf("top result path: %q (expected docs/api.md, may vary by ranking)", results[0].Path)
+	if out.Results[0].Path != "docs/api.md" {
+		t.Logf("top result path: %q (expected docs/api.md, may vary by ranking)", out.Results[0].Path)
 	}
-	for _, r := range results {
+	for _, r := range out.Results {
 		if r.Score == 0 {
 			t.Errorf("result for %q has zero score", r.Path)
 		}
 	}
 
 	// Ready should be true now
-	if !s.Ready() {
+	if !s.Ready(context.Background()) {
 		t.Error("Ready() should return true after indexing")
 	}
 
@@ -211,22 +246,22 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Old search should return no result (or only new content)
-	results2, err := s.SearchDocs(libID, "database querying", 10000)
+	out2, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search after replace error: %v", err)
 	}
-	for _, r := range results2 {
+	for _, r := range out2.Results {
 		if r.Path == "docs/api.md" {
 			t.Errorf("old chunk docs/api.md still present after ReplaceChunks")
 		}
 	}
 
 	// New content should be searchable
-	results3, err := s.SearchDocs(libID, "new content", 10000)
+	out3, err := s.SearchDocs(context.Background(), libID, "new content", 10000)
 	if err != nil {
 		t.Fatalf("Search for new content error: %v", err)
 	}
-	if len(results3) == 0 {
+	if len(out3.Results) == 0 {
 		t.Error("expected results for new content, got none")
 	}
 }

@@ -2,17 +2,22 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
 
 // Config holds the full docserve configuration.
 type Config struct {
-	DataDir   string           `yaml:"data_dir"`
-	Listen    string           `yaml:"listen"`
-	Proxy     ProxyConfig      `yaml:"proxy"`
-	Providers []ProviderConfig `yaml:"providers"`
+	DataDir        string           `yaml:"data_dir"`
+	Listen         string           `yaml:"listen"`
+	AllowedOrigins []string         `yaml:"allowed_origins"`
+	AuthTokenEnv   string           `yaml:"auth_token_env"`
+	AuthToken      string           `yaml:"-"`
+	Proxy          ProxyConfig      `yaml:"proxy"`
+	Providers      []ProviderConfig `yaml:"providers"`
 }
 
 // ProxyConfig holds HTTP/HTTPS proxy settings.
@@ -28,8 +33,8 @@ type ProviderConfig struct {
 	Proxy    bool         // default true; handled via custom UnmarshalYAML
 	Schedule string       `yaml:"schedule"`
 	Auth     AuthConfig   `yaml:"auth"`
-	Repos    []RepoConfig `yaml:"repos"`  // git providers only
-	Pages    []PageConfig `yaml:"pages"`  // confluence only
+	Repos    []RepoConfig `yaml:"repos"` // git providers only
+	Pages    []PageConfig `yaml:"pages"` // confluence only
 }
 
 // rawProvider mirrors ProviderConfig but uses *bool for Proxy to detect absence.
@@ -78,8 +83,8 @@ type RepoConfig struct {
 
 // RefConfig describes a single ref (branch/tag) within a repo.
 type RefConfig struct {
-	Name  string   `yaml:"name"`  // optional, override library name
-	Ref   string   `yaml:"ref"`   // branch/tag/sha
+	Name  string   `yaml:"name"` // optional, override library name
+	Ref   string   `yaml:"ref"`  // branch/tag/sha
 	Paths []string `yaml:"paths"`
 }
 
@@ -93,7 +98,7 @@ type PageConfig struct {
 
 // AuthConfig holds authentication settings for a provider or repo.
 type AuthConfig struct {
-	Type        string `yaml:"type"`         // "basic", "bearer", or "" (github token)
+	Type        string `yaml:"type"` // "basic", "bearer", or "" (github token)
 	TokenEnv    string `yaml:"token_env"`
 	UsernameEnv string `yaml:"username_env"`
 	PasswordEnv string `yaml:"password_env"`
@@ -213,6 +218,13 @@ func Load(path string) (*Config, error) {
 		cfg.DataDir = "data"
 	}
 
+	if cfg.AuthTokenEnv != "" {
+		cfg.AuthToken = os.Getenv(cfg.AuthTokenEnv)
+		if cfg.AuthToken == "" {
+			return nil, fmt.Errorf("auth_token_env: environment variable %q is not set or empty", cfg.AuthTokenEnv)
+		}
+	}
+
 	if err := validate(&cfg); err != nil {
 		return nil, err
 	}
@@ -222,6 +234,15 @@ func Load(path string) (*Config, error) {
 
 // validate checks that the config is semantically correct.
 func validate(cfg *Config) error {
+	for i, o := range cfg.AllowedOrigins {
+		o = strings.TrimSuffix(o, "/")
+		u, err := url.Parse(o)
+		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" {
+			return fmt.Errorf("allowed_origins: %q must be scheme://host[:port] with no path", o)
+		}
+		cfg.AllowedOrigins[i] = o
+	}
+
 	if len(cfg.Providers) == 0 {
 		return fmt.Errorf("config must have at least one provider")
 	}

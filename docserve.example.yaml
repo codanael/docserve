@@ -11,6 +11,18 @@ data_dir: /var/lib/docserve
 # Defaults to ":8080".
 listen: ":8080"
 
+# Optional: name of an environment variable holding a bearer token.
+# When set, every request to /mcp must carry "Authorization: Bearer <token>".
+# Loading fails if the variable is unset or empty. /healthz and /readyz stay open.
+# auth_token_env: DOCSERVE_TOKEN
+
+# Optional: origins accepted by the Origin check on /mcp in addition to
+# loopback origins (http://localhost, http://127.0.0.1, http://[::1], any port).
+# Requests without an Origin header (CLI and agent clients) are always accepted.
+# No CORS headers are emitted; browser clients need CORS handled by a reverse proxy.
+# allowed_origins:
+#   - https://my-ai-app.example.com
+
 # Optional HTTP/HTTPS proxy used when fetching sources.
 # Individual providers can opt out by setting proxy: false.
 proxy:

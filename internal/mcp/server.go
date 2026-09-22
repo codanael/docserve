@@ -1,7 +1,9 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -10,66 +12,145 @@ import (
 	"github.com/codanael/docserve/internal/index"
 )
 
+// Options configures the HTTP surface of the MCP server.
+type Options struct {
+	// AllowedOrigins lists origins (scheme://host[:port]) accepted by the
+	// Origin check in addition to loopback origins. Requests without an
+	// Origin header are always accepted. No CORS headers are emitted.
+	AllowedOrigins []string
+
+	// AuthToken, when non-empty, is required as a bearer token on /mcp.
+	AuthToken string
+}
+
 // Server wraps an MCP server with an HTTP handler.
 type Server struct {
 	mcpServer  *server.MCPServer
 	httpServer *server.StreamableHTTPServer
 	store      *index.Store
+	opts       Options
 }
 
+// instructions is sent to clients at initialize / server/discover time. It
+// describes how to combine the tools and deliberately does not repeat the
+// per-tool descriptions.
+const instructions = `docserve exposes full-text search over documentation libraries that were fetched and indexed locally.
+
+Recommended workflow:
+1. Call resolve-library with a fragment of the library name to obtain its exact name (or list-libraries to browse everything that is indexed).
+2. Call get-library-docs with that exact name and a short keyword query. Results are markdown chunks with their source path.
+3. If the result ends with a truncation notice, narrow the query or raise max_tokens.`
+
+// toolsListCacheTTLMs tells 2026-07-28 clients how long they may cache tools/list.
+const toolsListCacheTTLMs int64 = 60 * 60 * 1000
+
 // NewServer creates a new MCP server with tool handlers registered.
-func NewServer(store *index.Store, version string) *Server {
-	mcpSrv := server.NewMCPServer("docserve", version, server.WithToolCapabilities(false))
+func NewServer(store *index.Store, version string, opts Options) *Server {
+	mcpSrv := server.NewMCPServer("docserve", version,
+		server.WithToolCapabilities(false),
+		server.WithInstructions(instructions),
+		server.WithRecovery(),
+		server.WithInputSchemaValidation(),
+		server.WithStrictInputSchemaDefault(),
+		// The tool list is identical for every caller and changes only on
+		// deploy, so let 2026-07-28 clients cache it.
+		server.WithMethodCacheHints(mcplib.MethodToolsList, toolsListCacheTTLMs, mcplib.CacheScopePublic),
+		server.WithHooks(newHooks()),
+	)
 
 	handlers := &ToolHandlers{Store: store}
 
 	readOnly := mcplib.WithReadOnlyHintAnnotation(true)
 	notDestructive := mcplib.WithDestructiveHintAnnotation(false)
 	idempotent := mcplib.WithIdempotentHintAnnotation(true)
+	closedWorld := mcplib.WithOpenWorldHintAnnotation(false)
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("list-libraries",
-			mcplib.WithDescription("List all indexed documentation libraries. Returns each library's exact name and git ref (branch/tag). Use the exact name from this list when calling get-library-docs."),
-			readOnly, notDestructive, idempotent,
+			mcplib.WithToolTitle("List indexed libraries"),
+			mcplib.WithDescription("List every documentation library in the local index with its name, repository, ref, commit and fetch time. Use the returned name as the `library` argument of get-library-docs."),
+			mcplib.WithOutputSchema[libraryList](),
+			readOnly, notDestructive, idempotent, closedWorld,
 		),
 		handlers.ListLibraries,
 	)
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("resolve-library",
-			mcplib.WithDescription("Resolve a library by fuzzy name query, returning the best match with its exact name and ref. Use this to find the correct library name before calling get-library-docs."),
-			mcplib.WithString("query", mcplib.Required(), mcplib.Description("A partial or fuzzy library name to search for (e.g. 'spring', 'angular')")),
-			readOnly, notDestructive, idempotent,
+			mcplib.WithToolTitle("Resolve library name"),
+			mcplib.WithDescription("Find the exact name of an indexed library from a partial, case-insensitive name fragment (for example \"spring\" → \"spring-boot/v3.2.0\"). Returns the first alphabetical match."),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("Partial library name to match, such as \"spring\" or \"angular\"")),
+			mcplib.WithOutputSchema[libMatch](),
+			readOnly, notDestructive, idempotent, closedWorld,
 		),
 		handlers.ResolveLibrary,
 	)
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("get-library-docs",
-			mcplib.WithDescription("Search a library's indexed documentation by keyword query. The 'library' parameter must be the exact library name as returned by list-libraries or resolve-library. If unsure of the exact name, call resolve-library first."),
-			mcplib.WithString("library", mcplib.Required(), mcplib.Description("Exact library name as returned by list-libraries or resolve-library (e.g. 'spring-boot'). Must match exactly.")),
-			mcplib.WithString("query", mcplib.Required(), mcplib.Description("Keywords to search for in the documentation (e.g. 'health endpoint', 'routing'). Plain text, no special syntax needed.")),
-			mcplib.WithNumber("max_tokens", mcplib.Description("Maximum token budget for results (default 5000)")),
-			readOnly, notDestructive, idempotent,
+			mcplib.WithToolTitle("Search library documentation"),
+			mcplib.WithDescription("Full-text search (BM25) inside one library and return the best matching documentation chunks as markdown, each with its source path. Prefer a few specific keywords over long sentences. Ends with a truncation notice when more matches were omitted."),
+			mcplib.WithString("library", mcplib.Required(), mcplib.Description("Exact library name as returned by resolve-library or list-libraries")),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("Search keywords, for example \"actuator health endpoint\"")),
+			mcplib.WithNumber("max_tokens", mcplib.Min(1), mcplib.Description("Approximate token budget for the returned content (default 5000). Raise it when the output reports truncation.")),
+			readOnly, notDestructive, idempotent, closedWorld,
 		),
 		handlers.GetLibraryDocs,
 	)
 
-	httpSrv := server.NewStreamableHTTPServer(mcpSrv, server.WithEndpointPath("/mcp"))
+	// docserve keeps no per-session state, so run the transport stateless:
+	// no Mcp-Session-Id is issued or required, and legacy `initialize`
+	// clients and 2026-07-28 `server/discover` clients share the endpoint.
+	httpSrv := server.NewStreamableHTTPServer(mcpSrv,
+		server.WithStateLess(true),
+		// docserve validates the Origin header itself (see originCheck), which
+		// is the MCP spec's DNS-rebinding defense. mcp-go's additional loopback
+		// Host check would reject same-host reverse proxies that preserve the
+		// client's Host header, so it is disabled.
+		server.WithDisableLocalhostProtection(true),
+	)
 
 	return &Server{
 		mcpServer:  mcpSrv,
 		httpServer: httpSrv,
 		store:      store,
+		opts:       opts,
 	}
+}
+
+// newHooks logs every tool call outcome and every JSON-RPC level error with
+// the stdlib logger used by the rest of the binary.
+func newHooks() *server.Hooks {
+	hooks := &server.Hooks{}
+	hooks.AddAfterCallTool(func(_ context.Context, _ any, req *mcplib.CallToolRequest, result any) {
+		isErr := false
+		switch r := result.(type) {
+		case *mcplib.CallToolResult:
+			isErr = r != nil && r.IsError
+		case mcplib.CallToolResult:
+			isErr = r.IsError
+		}
+		name := ""
+		if req != nil {
+			name = req.Params.Name
+		}
+		log.Printf("mcp tools/call tool=%s error=%t", name, isErr)
+	})
+	hooks.AddOnError(func(_ context.Context, id any, method mcplib.MCPMethod, _ any, err error) {
+		log.Printf("mcp %q id=%v error: %v", string(method), id, err)
+	})
+	return hooks
 }
 
 // Handler returns an http.Handler that routes MCP and health check requests.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	// MCP streamable HTTP endpoint
-	mux.Handle("/mcp", s.httpServer)
+	// MCP streamable HTTP endpoint: Origin check → auth → body limit → transport.
+	mcpHandler := http.MaxBytesHandler(s.httpServer, maxBodyBytes)
+	mcpHandler = bearerAuth(s.opts.AuthToken, mcpHandler)
+	mcpHandler = originCheck(s.opts.AllowedOrigins, mcpHandler)
+	mux.Handle("/mcp", mcpHandler)
 
 	// Health check endpoints
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -78,7 +159,7 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		if s.store.Ready() {
+		if s.store.Ready(r.Context()) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, "ready")
 		} else {
