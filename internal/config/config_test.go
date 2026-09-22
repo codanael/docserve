@@ -514,6 +514,34 @@ sources:
 	}
 }
 
+func TestLoadConfigAuthToken(t *testing.T) {
+	content := `
+auth_token_env: DOCSERVE_TEST_TOKEN
+sources:
+  - name: s
+    provider: github
+    repo: org/repo
+    refs:
+      - ref: main
+        paths: [docs/]
+`
+	f := writeTempConfig(t, content)
+
+	t.Setenv("DOCSERVE_TEST_TOKEN", "")
+	if _, err := config.Load(f); err == nil {
+		t.Error("expected error when auth_token_env variable is empty")
+	}
+
+	t.Setenv("DOCSERVE_TEST_TOKEN", "abc")
+	cfg, err := config.Load(f)
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.AuthToken != "abc" {
+		t.Errorf("AuthToken = %q, want abc", cfg.AuthToken)
+	}
+}
+
 // writeTempConfig writes content to a temp file and returns its path.
 func writeTempConfig(t *testing.T, content string) string {
 	t.Helper()

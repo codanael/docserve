@@ -151,8 +151,12 @@ func cmdServe(args []string) {
 	}
 	sched.Start()
 
+	if cfg.AuthToken == "" {
+		log.Printf("warning: no auth_token_env configured; the /mcp endpoint accepts unauthenticated requests")
+	}
 	srv := mcpsrv.NewServer(store, version, mcpsrv.Options{
 		AllowedOrigins: cfg.AllowedOrigins,
+		AuthToken:      cfg.AuthToken,
 	})
 
 	httpSrv := &http.Server{

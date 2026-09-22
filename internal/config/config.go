@@ -13,6 +13,8 @@ type Config struct {
 	DataDir        string         `yaml:"data_dir"`
 	Listen         string         `yaml:"listen"`
 	AllowedOrigins []string       `yaml:"allowed_origins"`
+	AuthTokenEnv   string         `yaml:"auth_token_env"`
+	AuthToken      string         `yaml:"-"`
 	Proxy          ProxyConfig    `yaml:"proxy"`
 	Sources        []SourceConfig `yaml:"sources"`
 }
@@ -131,6 +133,13 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.DataDir == "" {
 		cfg.DataDir = "data"
+	}
+
+	if cfg.AuthTokenEnv != "" {
+		cfg.AuthToken = os.Getenv(cfg.AuthTokenEnv)
+		if cfg.AuthToken == "" {
+			return nil, fmt.Errorf("auth_token_env: environment variable %q is not set or empty", cfg.AuthTokenEnv)
+		}
 	}
 
 	if err := validate(&cfg); err != nil {

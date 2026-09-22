@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"net/url"
 	"strings"
@@ -51,4 +52,24 @@ func normalizeOrigin(origin string) string {
 		return strings.ToLower(strings.TrimRight(origin, "/"))
 	}
 	return strings.ToLower(u.Scheme + "://" + u.Host)
+}
+
+// bearerAuth requires `Authorization: Bearer <token>` on every request when
+// token is non-empty. With an empty token it is a no-op.
+func bearerAuth(token string, next http.Handler) http.Handler {
+	if token == "" {
+		return next
+	}
+	want := []byte(token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		const prefix = "bearer "
+		got := r.Header.Get("Authorization")
+		if len(got) > len(prefix) && strings.EqualFold(got[:len(prefix)], prefix) &&
+			subtle.ConstantTimeCompare([]byte(got[len(prefix):]), want) == 1 {
+			next.ServeHTTP(w, r)
+			return
+		}
+		w.Header().Set("WWW-Authenticate", `Bearer realm="docserve"`)
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+	})
 }

@@ -42,3 +42,42 @@ func TestOriginCheck(t *testing.T) {
 		}
 	}
 }
+
+func TestBearerAuth(t *testing.T) {
+	h := bearerAuth("s3cret", okHandler())
+
+	cases := []struct {
+		header string
+		want   int
+	}{
+		{"", http.StatusUnauthorized},
+		{"Bearer wrong", http.StatusUnauthorized},
+		{"Basic czNjcmV0", http.StatusUnauthorized},
+		{"Bearer s3cret", http.StatusOK},
+		{"bearer s3cret", http.StatusOK},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		if tc.header != "" {
+			req.Header.Set("Authorization", tc.header)
+		}
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != tc.want {
+			t.Errorf("Authorization %q: got %d, want %d", tc.header, w.Code, tc.want)
+		}
+		if tc.want == http.StatusUnauthorized && w.Header().Get("WWW-Authenticate") == "" {
+			t.Errorf("Authorization %q: missing WWW-Authenticate header", tc.header)
+		}
+	}
+}
+
+func TestBearerAuthDisabledWhenEmpty(t *testing.T) {
+	h := bearerAuth("", okHandler())
+	req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected passthrough with empty token, got %d", w.Code)
+	}
+}

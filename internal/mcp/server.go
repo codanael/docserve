@@ -16,6 +16,9 @@ type Options struct {
 	// addition to loopback origins. Requests without an Origin header are
 	// always accepted.
 	AllowedOrigins []string
+
+	// AuthToken, when non-empty, is required as a bearer token on /mcp.
+	AuthToken string
 }
 
 // Server wraps an MCP server with an HTTP handler.
@@ -109,8 +112,9 @@ func NewServer(store *index.Store, version string, opts Options) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	// MCP streamable HTTP endpoint: Origin check → body limit → transport.
+	// MCP streamable HTTP endpoint: Origin check → auth → body limit → transport.
 	var mcpHandler http.Handler = http.MaxBytesHandler(s.httpServer, maxBodyBytes)
+	mcpHandler = bearerAuth(s.opts.AuthToken, mcpHandler)
 	mcpHandler = originCheck(s.opts.AllowedOrigins, mcpHandler)
 	mux.Handle("/mcp", mcpHandler)
 

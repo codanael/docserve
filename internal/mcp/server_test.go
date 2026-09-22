@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -270,6 +271,34 @@ func TestMCPServerToolMetadata(t *testing.T) {
 	mt := props["max_tokens"].(map[string]any)
 	if mt["minimum"] != float64(1) {
 		t.Errorf("max_tokens.minimum = %v, want 1", mt["minimum"])
+	}
+}
+
+func TestMCPServerAuthProtectsOnlyMCP(t *testing.T) {
+	handler := NewServer(setupTestStore(t), "test", Options{AuthToken: "tok"}).Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("/mcp without token: got %d, want 401", w.Code)
+	}
+
+	req.Header.Set("Authorization", "Bearer tok")
+	req.Body = io.NopCloser(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("/mcp with token: got %d, want 200: %s", w.Code, w.Body.String())
+	}
+
+	for _, path := range []string{"/healthz", "/readyz"} {
+		w = httptest.NewRecorder()
+		handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code == http.StatusUnauthorized {
+			t.Errorf("%s must not require auth", path)
+		}
 	}
 }
 
