@@ -251,7 +251,7 @@ func cmdList(args []string) {
 	store := openStore(cfg)
 	defer store.Close() //nolint:errcheck
 
-	libs, err := store.ListLibraries()
+	libs, err := store.ListLibraries(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error listing libraries: %v\n", err)
 		os.Exit(1)
@@ -310,13 +310,13 @@ func cmdSearch(args []string) {
 	store := openStore(cfg)
 	defer store.Close() //nolint:errcheck
 
-	lib, err := store.GetLibrary(libraryName)
+	lib, err := store.GetLibrary(context.Background(), libraryName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 
-	results, err := store.SearchDocs(lib.ID, query, *maxTokens)
+	results, err := store.SearchDocs(context.Background(), lib.ID, query, *maxTokens)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error searching: %v\n", err)
 		os.Exit(1)

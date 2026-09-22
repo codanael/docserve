@@ -37,7 +37,7 @@ type libEntry struct {
 
 // ListLibraries returns all indexed libraries.
 func (h *ToolHandlers) ListLibraries(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
-	libs, err := h.Store.ListLibraries()
+	libs, err := h.Store.ListLibraries(ctx)
 	if err != nil {
 		return mcplib.NewToolResultError(fmt.Sprintf("failed to list libraries: %v", err)), nil
 	}
@@ -67,7 +67,7 @@ type libMatch struct {
 func (h *ToolHandlers) ResolveLibrary(ctx context.Context, req mcplib.CallToolRequest) (*mcplib.CallToolResult, error) {
 	query := req.GetString("query", "")
 
-	libs, err := h.Store.FindLibraries(query)
+	libs, err := h.Store.FindLibraries(ctx, query)
 	if err != nil {
 		return mcplib.NewToolResultError(fmt.Sprintf("failed to find libraries: %v", err)), nil
 	}
@@ -91,12 +91,12 @@ func (h *ToolHandlers) GetLibraryDocs(ctx context.Context, req mcplib.CallToolRe
 	query := req.GetString("query", "")
 	maxTokens := req.GetInt("max_tokens", 5000)
 
-	lib, err := h.Store.GetLibrary(library)
+	lib, err := h.Store.GetLibrary(ctx, library)
 	if err != nil {
 		return mcplib.NewToolResultError(fmt.Sprintf("library %q not found", library)), nil
 	}
 
-	results, err := h.Store.SearchDocs(lib.ID, query, maxTokens)
+	results, err := h.Store.SearchDocs(ctx, lib.ID, query, maxTokens)
 	if err != nil {
 		return mcplib.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
 	}

@@ -78,7 +78,7 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
-		if s.store.Ready() {
+		if s.store.Ready(r.Context()) {
 			w.WriteHeader(http.StatusOK)
 			_, _ = fmt.Fprint(w, "ready")
 		} else {

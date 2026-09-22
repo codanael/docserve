@@ -51,7 +51,7 @@ func (f *Fetcher) FetchSource(ctx context.Context, cfg config.SourceConfig, ref 
 
 	// Step 2: check if we already have this SHA indexed (unless Force).
 	if !f.Force {
-		lib, err := f.store.GetLibrary(libName)
+		lib, err := f.store.GetLibrary(ctx, libName)
 		if err == nil && lib.CommitSHA == sha {
 			log.Printf("[%s] already up to date at %s, skipping", libName, sha)
 			return &FetchResult{Source: libName, SHA: sha, Updated: false}, nil

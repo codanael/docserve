@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"strings"
@@ -122,9 +123,9 @@ func (s *Store) UpsertLibrary(lib Library) (int64, error) {
 }
 
 // GetLibrary returns the library with the given name, or an error if not found.
-func (s *Store) GetLibrary(name string) (*Library, error) {
+func (s *Store) GetLibrary(ctx context.Context, name string) (*Library, error) {
 	const q = `SELECT id, name, repo, ref, commit_sha, fetched_at FROM libraries WHERE name = ?`
-	row := s.db.QueryRow(q, name)
+	row := s.db.QueryRowContext(ctx, q, name)
 
 	var lib Library
 	var fetchedAt int64
@@ -139,9 +140,9 @@ func (s *Store) GetLibrary(name string) (*Library, error) {
 }
 
 // ListLibraries returns all libraries ordered by name.
-func (s *Store) ListLibraries() ([]Library, error) {
+func (s *Store) ListLibraries(ctx context.Context) ([]Library, error) {
 	const q = `SELECT id, name, repo, ref, commit_sha, fetched_at FROM libraries ORDER BY name`
-	rows, err := s.db.Query(q)
+	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list libraries: %w", err)
 	}
@@ -191,9 +192,9 @@ func (s *Store) ReplaceChunks(libraryID int64, chunks []Chunk) error {
 
 // Ready returns true if the database is accessible and at least one library
 // has been indexed.
-func (s *Store) Ready() bool {
+func (s *Store) Ready(ctx context.Context) bool {
 	var count int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM libraries`).Scan(&count)
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM libraries`).Scan(&count)
 	return err == nil && count > 0
 }
 
@@ -204,9 +205,9 @@ func escapeLike(s string) string {
 }
 
 // FindLibraries returns libraries whose name matches the given query (LIKE %query%).
-func (s *Store) FindLibraries(query string) ([]Library, error) {
+func (s *Store) FindLibraries(ctx context.Context, query string) ([]Library, error) {
 	const q = `SELECT id, name, repo, ref, commit_sha, fetched_at FROM libraries WHERE name LIKE ? ESCAPE '\' ORDER BY name`
-	rows, err := s.db.Query(q, "%"+escapeLike(query)+"%")
+	rows, err := s.db.QueryContext(ctx, q, "%"+escapeLike(query)+"%")
 	if err != nil {
 		return nil, fmt.Errorf("find libraries: %w", err)
 	}

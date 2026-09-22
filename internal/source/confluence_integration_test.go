@@ -150,7 +150,7 @@ func TestConfluenceIntegration(t *testing.T) {
 	// ---------------------------------------------------------------
 	// 4. Verify library stored
 	// ---------------------------------------------------------------
-	lib, err := store.GetLibrary(libName)
+	lib, err := store.GetLibrary(ctx, libName)
 	if err != nil {
 		t.Fatalf("GetLibrary: %v", err)
 	}
@@ -162,7 +162,7 @@ func TestConfluenceIntegration(t *testing.T) {
 	// ---------------------------------------------------------------
 	// 5. Search for "npm install"
 	// ---------------------------------------------------------------
-	npmResults, err := store.SearchDocs(lib.ID, "npm install", 4000)
+	npmResults, err := store.SearchDocs(ctx, lib.ID, "npm install", 4000)
 	if err != nil {
 		t.Fatalf("SearchDocs(npm install): %v", err)
 	}
@@ -175,7 +175,7 @@ func TestConfluenceIntegration(t *testing.T) {
 	// ---------------------------------------------------------------
 	// 6. Search for "api users"
 	// ---------------------------------------------------------------
-	apiResults, err := store.SearchDocs(lib.ID, "api users", 4000)
+	apiResults, err := store.SearchDocs(ctx, lib.ID, "api users", 4000)
 	if err != nil {
 		t.Fatalf("SearchDocs(api users): %v", err)
 	}

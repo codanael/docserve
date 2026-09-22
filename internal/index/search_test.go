@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -46,7 +47,7 @@ func TestSearchRanking(t *testing.T) {
 		t.Fatalf("ReplaceChunks error: %v", err)
 	}
 
-	results, err := s.SearchDocs(libID, "database configuration", 10000)
+	results, err := s.SearchDocs(context.Background(), libID, "database configuration", 10000)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
@@ -77,7 +78,7 @@ func TestSearchTokenBudget(t *testing.T) {
 		t.Fatalf("ReplaceChunks error: %v", err)
 	}
 
-	results, err := s.SearchDocs(libID, "budget test keyword", 100)
+	results, err := s.SearchDocs(context.Background(), libID, "budget test keyword", 100)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
@@ -103,7 +104,7 @@ func TestSearchNoResults(t *testing.T) {
 		t.Fatalf("ReplaceChunks error: %v", err)
 	}
 
-	results, err := s.SearchDocs(libID, "xyznonexistentterm", 10000)
+	results, err := s.SearchDocs(context.Background(), libID, "xyznonexistentterm", 10000)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
@@ -123,12 +124,12 @@ func TestSearchSpecialCharacters(t *testing.T) {
 	}
 
 	for _, q := range []string{`health AND`, `NEAR(`, `"health`, `path:health`, `health OR NOT`, `(health`} {
-		if _, err := s.SearchDocs(libID, q, 10000); err != nil {
+		if _, err := s.SearchDocs(context.Background(), libID, q, 10000); err != nil {
 			t.Errorf("SearchDocs(%q) returned error: %v", q, err)
 		}
 	}
 
-	results, err := s.SearchDocs(libID, `health AND`, 10000)
+	results, err := s.SearchDocs(context.Background(), libID, `health AND`, 10000)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
@@ -156,5 +157,22 @@ func TestBuildFTSQuery(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("buildFTSQuery(%q) = %q, want %q", tc.input, got, tc.want)
 		}
+	}
+}
+
+func TestSearchDocsCancelledContext(t *testing.T) {
+	s, libID := testLibrary(t)
+	if err := s.ReplaceChunks(libID, []Chunk{{Path: "a.md", Breadcrumb: "A", Content: "alpha beta"}}); err != nil {
+		t.Fatalf("ReplaceChunks error: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if _, err := s.SearchDocs(ctx, libID, "alpha", 1000); err == nil {
+		t.Fatal("expected error from cancelled context, got nil")
+	}
+	if _, err := s.ListLibraries(ctx); err == nil {
+		t.Fatal("expected error from cancelled context on ListLibraries, got nil")
 	}
 }

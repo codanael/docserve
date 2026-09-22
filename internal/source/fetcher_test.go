@@ -130,11 +130,11 @@ func TestFetchPipeline(t *testing.T) {
 	}
 
 	// Verify the updated content is findable via search.
-	lib, err := store.GetLibrary(libName)
+	lib, err := store.GetLibrary(ctx, libName)
 	if err != nil {
 		t.Fatalf("GetLibrary: %v", err)
 	}
-	results, err := store.SearchDocs(lib.ID, "unique_token_xyz", 100000)
+	results, err := store.SearchDocs(ctx, lib.ID, "unique_token_xyz", 100000)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

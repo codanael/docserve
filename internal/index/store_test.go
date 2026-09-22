@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"testing"
 	"time"
 )
@@ -38,7 +39,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	}
 
 	// Get
-	got, err := s.GetLibrary("mylib")
+	got, err := s.GetLibrary(context.Background(), "mylib")
 	if err != nil {
 		t.Fatalf("GetLibrary error: %v", err)
 	}
@@ -69,7 +70,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 		t.Errorf("updated id should match original: got %d want %d", id2, id)
 	}
 
-	got2, err := s.GetLibrary("mylib")
+	got2, err := s.GetLibrary(context.Background(), "mylib")
 	if err != nil {
 		t.Fatalf("GetLibrary after update error: %v", err)
 	}
@@ -94,7 +95,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	}
 
 	// List
-	libs, err := s.ListLibraries()
+	libs, err := s.ListLibraries(context.Background())
 	if err != nil {
 		t.Fatalf("ListLibraries error: %v", err)
 	}
@@ -110,13 +111,13 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	}
 
 	// GetLibrary for non-existent
-	_, err = s.GetLibrary("doesnotexist")
+	_, err = s.GetLibrary(context.Background(), "doesnotexist")
 	if err == nil {
 		t.Error("expected error for non-existent library, got nil")
 	}
 
 	// FindLibraries
-	found, err := s.FindLibraries("another")
+	found, err := s.FindLibraries(context.Background(), "another")
 	if err != nil {
 		t.Fatalf("FindLibraries error: %v", err)
 	}
@@ -124,7 +125,7 @@ func TestStoreLibraryCRUD(t *testing.T) {
 		t.Errorf("FindLibraries: expected [anotherlib], got %v", found)
 	}
 
-	found2, err := s.FindLibraries("lib")
+	found2, err := s.FindLibraries(context.Background(), "lib")
 	if err != nil {
 		t.Fatalf("FindLibraries 'lib' error: %v", err)
 	}
@@ -157,7 +158,7 @@ func TestFindLibrariesEscapesWildcards(t *testing.T) {
 		{"", 3},       // empty query matches everything
 	}
 	for _, tc := range cases {
-		libs, err := s.FindLibraries(tc.query)
+		libs, err := s.FindLibraries(context.Background(), tc.query)
 		if err != nil {
 			t.Fatalf("FindLibraries(%q) error: %v", tc.query, err)
 		}
@@ -210,7 +211,7 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Search
-	results, err := s.SearchDocs(libID, "database querying", 10000)
+	results, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search error: %v", err)
 	}
@@ -228,7 +229,7 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Ready should be true now
-	if !s.Ready() {
+	if !s.Ready(context.Background()) {
 		t.Error("Ready() should return true after indexing")
 	}
 
@@ -245,7 +246,7 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Old search should return no result (or only new content)
-	results2, err := s.SearchDocs(libID, "database querying", 10000)
+	results2, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search after replace error: %v", err)
 	}
@@ -256,7 +257,7 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// New content should be searchable
-	results3, err := s.SearchDocs(libID, "new content", 10000)
+	results3, err := s.SearchDocs(context.Background(), libID, "new content", 10000)
 	if err != nil {
 		t.Fatalf("Search for new content error: %v", err)
 	}

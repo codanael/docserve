@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"fmt"
 	"strings"
 )
@@ -24,7 +25,7 @@ func buildFTSQuery(input string) string {
 
 // SearchDocs performs an FTS5 search using BM25 ranking and returns results
 // within the token budget (approximated as len(content)/4 tokens).
-func (s *Store) SearchDocs(libraryID int64, query string, maxTokens int) ([]SearchResult, error) {
+func (s *Store) SearchDocs(ctx context.Context, libraryID int64, query string, maxTokens int) ([]SearchResult, error) {
 	ftsQuery := buildFTSQuery(query)
 	if ftsQuery == "" {
 		return nil, nil
@@ -37,7 +38,7 @@ func (s *Store) SearchDocs(libraryID int64, query string, maxTokens int) ([]Sear
 		ORDER BY score ASC
 		LIMIT 50`
 
-	rows, err := s.db.Query(q, libraryID, ftsQuery)
+	rows, err := s.db.QueryContext(ctx, q, libraryID, ftsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("fts search: %w", err)
 	}
