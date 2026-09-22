@@ -17,17 +17,19 @@ make lint                           # golangci-lint
 cmd/docserve/main.go        CLI entrypoint (os.Args + flag.NewFlagSet, no framework)
 internal/config/             YAML config parsing, validation, proxy/auth config
 internal/index/              SQLite FTS5 store, chunkers (markdown + asciidoc), search
-internal/source/             Provider interface, GitHub + Azure DevOps, fetch pipeline
+internal/source/             Provider interface, GitHub + Azure DevOps + Confluence, fetch pipeline
 internal/mcp/                MCP server, 3 tool handlers, Streamable HTTP transport
 internal/scheduler/          Cron-based periodic fetch scheduler
 ```
 
 ## Dependencies
 
-Only 3 external modules — everything else is stdlib:
-- `github.com/mark3labs/mcp-go` — MCP protocol + Streamable HTTP transport
+Direct modules (everything else is stdlib):
+- `github.com/mark3labs/mcp-go` v1.1.0 — MCP protocol (spec 2026-07-28 with legacy fallback) + Streamable HTTP transport
 - `modernc.org/sqlite` — SQLite pure Go (no CGO)
 - `gopkg.in/yaml.v3` — config parsing
+- `github.com/JohannesKaufmann/html-to-markdown/v2` + `github.com/JohannesKaufmann/dom` — Confluence XHTML → Markdown
+- `golang.org/x/net` — HTML parsing helpers for the Confluence provider
 
 ## Key Design Decisions
 
