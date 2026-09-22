@@ -81,25 +81,28 @@ func TestListLibraries(t *testing.T) {
 	if result.StructuredContent == nil {
 		t.Fatal("expected structuredContent to be set")
 	}
-	entries, ok := result.StructuredContent.([]libEntry)
+	list, ok := result.StructuredContent.(libraryList)
 	if !ok {
-		t.Fatalf("structuredContent type = %T, want []libEntry", result.StructuredContent)
+		t.Fatalf("structuredContent type = %T, want libraryList", result.StructuredContent)
 	}
-	if len(entries) != 2 {
-		t.Fatalf("expected 2 entries, got %d", len(entries))
+	if len(list.Libraries) != 2 {
+		t.Fatalf("expected 2 libraries, got %d", len(list.Libraries))
 	}
-	if entries[0].Name != "angular" {
-		t.Errorf("first entry name = %q, want angular", entries[0].Name)
+	if list.Libraries[0].Name != "angular" || list.Libraries[1].Name != "spring-boot" {
+		t.Errorf("unexpected order: %+v", list.Libraries)
+	}
+	if list.Libraries[0].Repo != "github.com/angular/angular" || list.Libraries[0].CommitSHA != "def456" {
+		t.Errorf("repo/commit_sha not populated: %+v", list.Libraries[0])
 	}
 
 	// Verify text fallback is valid JSON.
 	text := result.Content[0].(mcplib.TextContent).Text
-	var fallback []map[string]any
+	var fallback map[string]any
 	if err := json.Unmarshal([]byte(text), &fallback); err != nil {
 		t.Fatalf("text fallback is not valid JSON: %v", err)
 	}
-	if len(fallback) != 2 {
-		t.Errorf("text fallback has %d entries, want 2", len(fallback))
+	if !strings.Contains(text, "\"libraries\"") {
+		t.Errorf("text fallback missing libraries key: %s", text)
 	}
 }
 
@@ -214,6 +217,76 @@ func TestGetLibraryDocsNoResults(t *testing.T) {
 	text := result.Content[0].(mcplib.TextContent).Text
 	if !strings.Contains(text, "No results") {
 		t.Errorf("expected 'No results' message, got: %s", text)
+	}
+}
+
+func TestResolveLibraryMissingQuery(t *testing.T) {
+	store := setupTestStore(t)
+	h := &ToolHandlers{Store: store}
+
+	for name, args := range map[string]map[string]any{
+		"absent": {},
+		"empty":  {"query": "   "},
+		"number": {"query": 42},
+	} {
+		result, err := h.ResolveLibrary(context.Background(), makeRequest(args))
+		if err != nil {
+			t.Fatalf("%s: error: %v", name, err)
+		}
+		if !result.IsError {
+			t.Errorf("%s: expected IsError=true", name)
+		}
+		if text := result.Content[0].(mcplib.TextContent).Text; !strings.Contains(text, "query") {
+			t.Errorf("%s: error text should mention the argument, got %q", name, text)
+		}
+	}
+}
+
+func TestGetLibraryDocsMissingArgs(t *testing.T) {
+	store := setupTestStore(t)
+	h := &ToolHandlers{Store: store}
+
+	cases := map[string]map[string]any{
+		"no library":      {"query": "actuator"},
+		"no query":        {"library": "spring-boot"},
+		"empty query":     {"library": "spring-boot", "query": ""},
+		"zero tokens":     {"library": "spring-boot", "query": "actuator", "max_tokens": 0},
+		"negative tokens": {"library": "spring-boot", "query": "actuator", "max_tokens": -5},
+	}
+	for name, args := range cases {
+		result, err := h.GetLibraryDocs(context.Background(), makeRequest(args))
+		if err != nil {
+			t.Fatalf("%s: error: %v", name, err)
+		}
+		if !result.IsError {
+			t.Errorf("%s: expected IsError=true, got %q", name, result.Content[0].(mcplib.TextContent).Text)
+		}
+	}
+}
+
+func TestGetLibraryDocsTruncationNotice(t *testing.T) {
+	store := setupTestStore(t)
+	h := &ToolHandlers{Store: store}
+
+	lib, err := store.GetLibrary(context.Background(), "spring-boot")
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	chunks := make([]index.Chunk, 60)
+	for i := range chunks {
+		chunks[i] = index.Chunk{Path: "docs/p.md", Breadcrumb: "P", Content: "trunc keyword " + strings.Repeat("x", 200)}
+	}
+	if err := store.ReplaceChunks(lib.ID, chunks); err != nil {
+		t.Fatalf("ReplaceChunks: %v", err)
+	}
+
+	result, err := h.GetLibraryDocs(context.Background(), makeRequest(map[string]any{"library": "spring-boot", "query": "trunc", "max_tokens": 120}))
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	text := result.Content[0].(mcplib.TextContent).Text
+	if !strings.Contains(text, "max_tokens") {
+		t.Errorf("expected truncation notice mentioning max_tokens, got:\n%s", text)
 	}
 }
 
