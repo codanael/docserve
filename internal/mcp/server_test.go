@@ -2,12 +2,13 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 
@@ -191,8 +192,8 @@ func TestMCPServerBodyLimit(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
-	if w.Code == http.StatusOK {
-		t.Errorf("expected oversized body to be rejected, got 200")
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400 for oversized body, got %d", w.Code)
 	}
 }
 
@@ -333,10 +334,27 @@ func TestMCPServerInputValidation(t *testing.T) {
 	}
 }
 
+func TestMCPServerAllowsProxiedHostOnLoopback(t *testing.T) {
+	handler := NewServer(setupTestStore(t), "test", Options{}).Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Host = "docs.example.com"
+	// Simulate a reverse proxy connecting over the loopback interface.
+	req = req.WithContext(context.WithValue(req.Context(), http.LocalAddrContextKey, &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 8080}))
+
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 for non-loopback Host over loopback connection, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestMCPServerLogsToolCalls(t *testing.T) {
 	var buf bytes.Buffer
+	prev := log.Writer()
 	log.SetOutput(&buf)
-	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	t.Cleanup(func() { log.SetOutput(prev) })
 
 	handler := NewServer(setupTestStore(t), "test", Options{}).Handler()
 	postMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list-libraries","arguments":{}}}`)

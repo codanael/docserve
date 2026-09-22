@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tool arguments are validated against their schema; unknown or missing arguments return `isError` results
 - `openWorldHint` is now `false` on all tools
 - HTTP server timeouts and a 1 MiB request body limit
+- mcp-go's loopback Host check is disabled; Origin validation (see `allowed_origins`) is the DNS-rebinding defense, so same-host reverse proxies that preserve the client Host header keep working
+- Search terms are matched literally: a trailing `*` no longer performs FTS5 prefix matching (stemming still applies)
 
 ### Fixed
 - FTS5 operators and quotes in queries no longer cause SQLite syntax errors

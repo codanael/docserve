@@ -14,9 +14,9 @@ import (
 
 // Options configures the HTTP surface of the MCP server.
 type Options struct {
-	// AllowedOrigins lists browser origins (scheme://host[:port]) accepted in
-	// addition to loopback origins. Requests without an Origin header are
-	// always accepted.
+	// AllowedOrigins lists origins (scheme://host[:port]) accepted by the
+	// Origin check in addition to loopback origins. Requests without an
+	// Origin header are always accepted. No CORS headers are emitted.
 	AllowedOrigins []string
 
 	// AuthToken, when non-empty, is required as a bearer token on /mcp.
@@ -101,7 +101,14 @@ func NewServer(store *index.Store, version string, opts Options) *Server {
 	// docserve keeps no per-session state, so run the transport stateless:
 	// no Mcp-Session-Id is issued or required, and legacy `initialize`
 	// clients and 2026-07-28 `server/discover` clients share the endpoint.
-	httpSrv := server.NewStreamableHTTPServer(mcpSrv, server.WithStateLess(true))
+	httpSrv := server.NewStreamableHTTPServer(mcpSrv,
+		server.WithStateLess(true),
+		// docserve validates the Origin header itself (see originCheck), which
+		// is the MCP spec's DNS-rebinding defense. mcp-go's additional loopback
+		// Host check would reject same-host reverse proxies that preserve the
+		// client's Host header, so it is disabled.
+		server.WithDisableLocalhostProtection(true),
+	)
 
 	return &Server{
 		mcpServer:  mcpSrv,
@@ -130,7 +137,7 @@ func newHooks() *server.Hooks {
 		log.Printf("mcp tools/call tool=%s error=%t", name, isErr)
 	})
 	hooks.AddOnError(func(_ context.Context, id any, method mcplib.MCPMethod, _ any, err error) {
-		log.Printf("mcp %s id=%v error: %v", method, id, err)
+		log.Printf("mcp %q id=%v error: %v", string(method), id, err)
 	})
 	return hooks
 }
@@ -140,7 +147,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	// MCP streamable HTTP endpoint: Origin check → auth → body limit → transport.
-	var mcpHandler http.Handler = http.MaxBytesHandler(s.httpServer, maxBodyBytes)
+	mcpHandler := http.MaxBytesHandler(s.httpServer, maxBodyBytes)
 	mcpHandler = bearerAuth(s.opts.AuthToken, mcpHandler)
 	mcpHandler = originCheck(s.opts.AllowedOrigins, mcpHandler)
 	mux.Handle("/mcp", mcpHandler)

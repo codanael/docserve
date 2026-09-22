@@ -14,9 +14,10 @@ listen: ":8080"
 # Loading fails if the variable is unset or empty. /healthz and /readyz stay open.
 # auth_token_env: DOCSERVE_TOKEN
 
-# Optional: browser origins allowed to call /mcp in addition to loopback
-# origins (http://localhost, http://127.0.0.1, http://[::1], any port).
+# Optional: origins accepted by the Origin check on /mcp in addition to
+# loopback origins (http://localhost, http://127.0.0.1, http://[::1], any port).
 # Requests without an Origin header (CLI and agent clients) are always accepted.
+# No CORS headers are emitted; browser clients need CORS handled by a reverse proxy.
 # allowed_origins:
 #   - https://my-ai-app.example.com
 

@@ -3,6 +3,7 @@ package mcp
 import (
 	"crypto/subtle"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strings"
 )
@@ -37,8 +38,11 @@ func originAllowed(origin string, allowed map[string]struct{}) bool {
 	if _, ok := allowed[normalizeOrigin(origin)]; ok {
 		return true
 	}
-	switch u.Hostname() {
-	case "localhost", "127.0.0.1", "::1":
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	if ip, err := netip.ParseAddr(host); err == nil && ip.IsLoopback() {
 		return true
 	}
 	return false

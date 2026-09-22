@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -151,11 +152,13 @@ func Load(path string) (*Config, error) {
 
 // validate checks that the config is semantically correct.
 func validate(cfg *Config) error {
-	for _, o := range cfg.AllowedOrigins {
+	for i, o := range cfg.AllowedOrigins {
+		o = strings.TrimSuffix(o, "/")
 		u, err := url.Parse(o)
 		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" {
 			return fmt.Errorf("allowed_origins: %q must be scheme://host[:port] with no path", o)
 		}
+		cfg.AllowedOrigins[i] = o
 	}
 
 	if len(cfg.Sources) == 0 {

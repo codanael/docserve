@@ -62,7 +62,7 @@ Credentials are always read from environment variables referenced by name in the
 Two optional top-level keys control the MCP endpoint:
 
 - `auth_token_env` -- name of an environment variable holding a bearer token. When set, `/mcp` requires `Authorization: Bearer <token>`. Without it the endpoint is open; only do that on a trusted network.
-- `allowed_origins` -- browser origins allowed to call `/mcp` besides loopback origins. Requests without an `Origin` header are always accepted; foreign origins get `403`.
+- `allowed_origins` -- origins accepted by the `Origin` check on `/mcp` in addition to loopback origins (`http://localhost`, `http://127.0.0.1`, `http://[::1]`, any port). Requests without an `Origin` header, which is what CLI and agent clients send, are always accepted; other origins get `403`. docserve emits no CORS headers, so a browser-based client additionally needs CORS handled by a reverse proxy. docserve does not check the `Host` header, so a reverse proxy on the same machine may forward the original `Host` unchanged.
 
 ### Config resolution order
 
@@ -93,7 +93,7 @@ docserve version
 
 ### MCP Client Configuration
 
-docserve speaks MCP specification revision 2026-07-28 and also serves clients on the 2025-11-25, 2025-06-18 and 2025-03-26 revisions through the same `/mcp` endpoint. The transport is stateless: no `Mcp-Session-Id` is issued or required.
+docserve speaks MCP specification revision 2026-07-28 and also serves clients on the 2025-11-25, 2025-06-18, 2025-03-26 and earlier revisions through the same `/mcp` endpoint. The transport is stateless: no `Mcp-Session-Id` is issued or required.
 
 Point your MCP client at the server's `/mcp` endpoint:
 

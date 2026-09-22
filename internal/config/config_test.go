@@ -483,6 +483,7 @@ func TestLoadConfigAllowedOrigins(t *testing.T) {
 allowed_origins:
   - https://app.example.com
   - http://intranet:3000
+  - https://trailing.example.com/
 sources:
   - name: s
     provider: github
@@ -495,8 +496,11 @@ sources:
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if len(cfg.AllowedOrigins) != 2 || cfg.AllowedOrigins[0] != "https://app.example.com" {
+	if len(cfg.AllowedOrigins) != 3 || cfg.AllowedOrigins[0] != "https://app.example.com" {
 		t.Errorf("AllowedOrigins = %v", cfg.AllowedOrigins)
+	}
+	if cfg.AllowedOrigins[2] != "https://trailing.example.com" {
+		t.Errorf("AllowedOrigins[2] = %q, want https://trailing.example.com (trailing slash trimmed)", cfg.AllowedOrigins[2])
 	}
 
 	bad := `
