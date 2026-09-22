@@ -26,40 +26,68 @@ type Server struct {
 	opts       Options
 }
 
+// instructions is sent to clients at initialize / server/discover time. It
+// describes how to combine the tools and deliberately does not repeat the
+// per-tool descriptions.
+const instructions = `docserve exposes full-text search over documentation libraries that were fetched and indexed locally.
+
+Recommended workflow:
+1. Call resolve-library with a fragment of the library name to obtain its exact name (or list-libraries to browse everything that is indexed).
+2. Call get-library-docs with that exact name and a short keyword query. Results are markdown chunks with their source path.
+3. If the result ends with a truncation notice, narrow the query or raise max_tokens.`
+
+// toolsListCacheTTLMs tells 2026-07-28 clients how long they may cache tools/list.
+const toolsListCacheTTLMs int64 = 60 * 60 * 1000
+
 // NewServer creates a new MCP server with tool handlers registered.
 func NewServer(store *index.Store, version string, opts Options) *Server {
-	mcpSrv := server.NewMCPServer("docserve", version, server.WithToolCapabilities(false))
+	mcpSrv := server.NewMCPServer("docserve", version,
+		server.WithToolCapabilities(false),
+		server.WithInstructions(instructions),
+		server.WithRecovery(),
+		server.WithInputSchemaValidation(),
+		server.WithStrictInputSchemaDefault(),
+		// The tool list is identical for every caller and changes only on
+		// deploy, so let 2026-07-28 clients cache it.
+		server.WithMethodCacheHints(mcplib.MethodToolsList, toolsListCacheTTLMs, mcplib.CacheScopePublic),
+	)
 
 	handlers := &ToolHandlers{Store: store}
 
 	readOnly := mcplib.WithReadOnlyHintAnnotation(true)
 	notDestructive := mcplib.WithDestructiveHintAnnotation(false)
 	idempotent := mcplib.WithIdempotentHintAnnotation(true)
+	closedWorld := mcplib.WithOpenWorldHintAnnotation(false)
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("list-libraries",
-			mcplib.WithDescription("List all indexed documentation libraries"),
-			readOnly, notDestructive, idempotent,
+			mcplib.WithToolTitle("List indexed libraries"),
+			mcplib.WithDescription("List every documentation library in the local index with its name, repository, ref, commit and fetch time. Use the returned name as the `library` argument of get-library-docs."),
+			mcplib.WithOutputSchema[libraryList](),
+			readOnly, notDestructive, idempotent, closedWorld,
 		),
 		handlers.ListLibraries,
 	)
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("resolve-library",
-			mcplib.WithDescription("Resolve a library by name query, returning the first match"),
-			mcplib.WithString("query", mcplib.Required(), mcplib.Description("The library name query to search for")),
-			readOnly, notDestructive, idempotent,
+			mcplib.WithToolTitle("Resolve library name"),
+			mcplib.WithDescription("Find the exact name of an indexed library from a partial, case-insensitive name fragment (for example \"spring\" → \"spring-boot/v3.2.0\"). Returns the first alphabetical match."),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("Partial library name to match, such as \"spring\" or \"angular\"")),
+			mcplib.WithOutputSchema[libMatch](),
+			readOnly, notDestructive, idempotent, closedWorld,
 		),
 		handlers.ResolveLibrary,
 	)
 
 	mcpSrv.AddTool(
 		mcplib.NewTool("get-library-docs",
-			mcplib.WithDescription("Search a library's documentation and return matching content"),
-			mcplib.WithString("library", mcplib.Required(), mcplib.Description("The library name to search")),
-			mcplib.WithString("query", mcplib.Required(), mcplib.Description("The search query")),
-			mcplib.WithNumber("max_tokens", mcplib.Description("Maximum token budget for results (default 5000)")),
-			readOnly, notDestructive, idempotent,
+			mcplib.WithToolTitle("Search library documentation"),
+			mcplib.WithDescription("Full-text search (BM25) inside one library and return the best matching documentation chunks as markdown, each with its source path. Prefer a few specific keywords over long sentences. Ends with a truncation notice when more matches were omitted."),
+			mcplib.WithString("library", mcplib.Required(), mcplib.Description("Exact library name as returned by resolve-library or list-libraries")),
+			mcplib.WithString("query", mcplib.Required(), mcplib.Description("Search keywords, for example \"actuator health endpoint\"")),
+			mcplib.WithNumber("max_tokens", mcplib.Min(1), mcplib.Description("Approximate token budget for the returned content (default 5000). Raise it when the output reports truncation.")),
+			readOnly, notDestructive, idempotent, closedWorld,
 		),
 		handlers.GetLibraryDocs,
 	)

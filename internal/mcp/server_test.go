@@ -191,3 +191,112 @@ func TestMCPServerBodyLimit(t *testing.T) {
 		t.Errorf("expected oversized body to be rejected, got 200")
 	}
 }
+
+// postMCP sends one JSON-RPC request to the handler and returns the decoded envelope.
+func postMCP(t *testing.T, handler http.Handler, body string) map[string]any {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d: %s", w.Code, w.Body.String())
+	}
+	var env map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal: %v (%s)", err, w.Body.String())
+	}
+	return env
+}
+
+func TestMCPServerInstructions(t *testing.T) {
+	handler := NewServer(setupTestStore(t), "test", Options{}).Handler()
+	env := postMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"1"}}}`)
+	result := env["result"].(map[string]any)
+	instr, _ := result["instructions"].(string)
+	if !strings.Contains(instr, "resolve-library") || !strings.Contains(instr, "get-library-docs") {
+		t.Errorf("instructions should describe the workflow, got %q", instr)
+	}
+}
+
+func TestMCPServerToolMetadata(t *testing.T) {
+	handler := NewServer(setupTestStore(t), "test", Options{}).Handler()
+	env := postMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
+	tools := env["result"].(map[string]any)["tools"].([]any)
+
+	byName := map[string]map[string]any{}
+	for _, tl := range tools {
+		tm := tl.(map[string]any)
+		byName[tm["name"].(string)] = tm
+	}
+
+	for _, name := range []string{"list-libraries", "resolve-library", "get-library-docs"} {
+		tm, ok := byName[name]
+		if !ok {
+			t.Fatalf("tool %s missing", name)
+		}
+		if title, _ := tm["title"].(string); title == "" {
+			t.Errorf("%s: missing title", name)
+		}
+		ann, _ := tm["annotations"].(map[string]any)
+		if ann["openWorldHint"] != false {
+			t.Errorf("%s: openWorldHint = %v, want false", name, ann["openWorldHint"])
+		}
+		if ann["readOnlyHint"] != true || ann["destructiveHint"] != false || ann["idempotentHint"] != true {
+			t.Errorf("%s: unexpected annotations %v", name, ann)
+		}
+		in, _ := tm["inputSchema"].(map[string]any)
+		if in["additionalProperties"] != false {
+			t.Errorf("%s: inputSchema.additionalProperties = %v, want false", name, in["additionalProperties"])
+		}
+	}
+
+	for _, name := range []string{"list-libraries", "resolve-library"} {
+		out, _ := byName[name]["outputSchema"].(map[string]any)
+		if out["type"] != "object" {
+			t.Errorf("%s: outputSchema.type = %v, want object", name, out["type"])
+		}
+		props, _ := out["properties"].(map[string]any)
+		if len(props) == 0 {
+			t.Errorf("%s: outputSchema has no properties", name)
+		}
+	}
+	if _, has := byName["get-library-docs"]["outputSchema"]; has {
+		t.Errorf("get-library-docs returns markdown text and must not declare an outputSchema")
+	}
+
+	props := byName["get-library-docs"]["inputSchema"].(map[string]any)["properties"].(map[string]any)
+	mt := props["max_tokens"].(map[string]any)
+	if mt["minimum"] != float64(1) {
+		t.Errorf("max_tokens.minimum = %v, want 1", mt["minimum"])
+	}
+}
+
+func TestMCPServerInputValidation(t *testing.T) {
+	handler := NewServer(setupTestStore(t), "test", Options{}).Handler()
+
+	// Missing required argument → tool execution error (isError), not a JSON-RPC error.
+	env := postMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"resolve-library","arguments":{}}}`)
+	result, ok := env["result"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected result envelope, got %v", env)
+	}
+	if result["isError"] != true {
+		t.Errorf("expected isError=true, got %v", result)
+	}
+
+	// Unknown argument → rejected because additionalProperties is false.
+	env = postMCP(t, handler, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"list-libraries","arguments":{"bogus":1}}}`)
+	if result, _ := env["result"].(map[string]any); result["isError"] != true {
+		t.Errorf("expected isError=true for unknown argument, got %v", env)
+	}
+
+	// Valid call still works.
+	env = postMCP(t, handler, `{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"resolve-library","arguments":{"query":"spring"}}}`)
+	if result, _ := env["result"].(map[string]any); result["isError"] == true {
+		t.Errorf("valid call failed: %v", env)
+	} else if sc, _ := result["structuredContent"].(map[string]any); sc["name"] != "spring-boot" {
+		t.Errorf("structuredContent.name = %v", sc["name"])
+	}
+}
