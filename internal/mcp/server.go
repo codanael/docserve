@@ -1,7 +1,9 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"net/http"
 
 	mcplib "github.com/mark3labs/mcp-go/mcp"
@@ -53,6 +55,7 @@ func NewServer(store *index.Store, version string, opts Options) *Server {
 		// The tool list is identical for every caller and changes only on
 		// deploy, so let 2026-07-28 clients cache it.
 		server.WithMethodCacheHints(mcplib.MethodToolsList, toolsListCacheTTLMs, mcplib.CacheScopePublic),
+		server.WithHooks(newHooks()),
 	)
 
 	handlers := &ToolHandlers{Store: store}
@@ -106,6 +109,30 @@ func NewServer(store *index.Store, version string, opts Options) *Server {
 		store:      store,
 		opts:       opts,
 	}
+}
+
+// newHooks logs every tool call outcome and every JSON-RPC level error with
+// the stdlib logger used by the rest of the binary.
+func newHooks() *server.Hooks {
+	hooks := &server.Hooks{}
+	hooks.AddAfterCallTool(func(_ context.Context, _ any, req *mcplib.CallToolRequest, result any) {
+		isErr := false
+		switch r := result.(type) {
+		case *mcplib.CallToolResult:
+			isErr = r != nil && r.IsError
+		case mcplib.CallToolResult:
+			isErr = r.IsError
+		}
+		name := ""
+		if req != nil {
+			name = req.Params.Name
+		}
+		log.Printf("mcp tools/call tool=%s error=%t", name, isErr)
+	})
+	hooks.AddOnError(func(_ context.Context, id any, method mcplib.MCPMethod, _ any, err error) {
+		log.Printf("mcp %s id=%v error: %v", method, id, err)
+	})
+	return hooks
 }
 
 // Handler returns an http.Handler that routes MCP and health check requests.

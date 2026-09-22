@@ -1,10 +1,13 @@
 package mcp
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
@@ -327,5 +330,23 @@ func TestMCPServerInputValidation(t *testing.T) {
 		t.Errorf("valid call failed: %v", env)
 	} else if sc, _ := result["structuredContent"].(map[string]any); sc["name"] != "spring-boot" {
 		t.Errorf("structuredContent.name = %v", sc["name"])
+	}
+}
+
+func TestMCPServerLogsToolCalls(t *testing.T) {
+	var buf bytes.Buffer
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+
+	handler := NewServer(setupTestStore(t), "test", Options{}).Handler()
+	postMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"list-libraries","arguments":{}}}`)
+	postMCP(t, handler, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"resolve-library","arguments":{"query":"nope"}}}`)
+
+	logs := buf.String()
+	if !strings.Contains(logs, "tool=list-libraries") || !strings.Contains(logs, "error=false") {
+		t.Errorf("expected success log line, got:\n%s", logs)
+	}
+	if !strings.Contains(logs, "tool=resolve-library") || !strings.Contains(logs, "error=true") {
+		t.Errorf("expected error log line, got:\n%s", logs)
 	}
 }
