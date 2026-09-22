@@ -26,7 +26,7 @@
       "description": "Origins accepted by the Origin check on /mcp in addition to loopback origins. Each entry must be scheme://host[:port] with no path; a single trailing slash is trimmed.",
       "items": {
         "type": "string",
-        "pattern": "^https?://[^/]+/?$"
+        "pattern": "^[hH][tT][tT][pP][sS]?://[^/]+/?$"
       },
       "examples": [["https://my-ai-app.example.com"]]
     },
