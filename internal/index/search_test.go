@@ -166,12 +166,17 @@ func TestSearchSpecialCharacters(t *testing.T) {
 
 	chunks := []Chunk{
 		{Path: "docs/health.md", Breadcrumb: "Health", Content: "The health endpoint reports status."},
+		{Path: "docs/intro.md", Breadcrumb: "Introduction", Content: "Welcome to version v3.2 of the library, e.g. the docs."},
 	}
 	if err := s.ReplaceChunks(libID, chunks); err != nil {
 		t.Fatalf("ReplaceChunks error: %v", err)
 	}
 
-	for _, q := range []string{`health AND`, `NEAR(`, `"health`, `path:health`, `health OR NOT`, `(health`} {
+	// None of these may reach FTS5 as operators; they must be matched literally.
+	for _, q := range []string{
+		`health AND`, `NEAR(`, `"health`, `path:health`, `health OR NOT`, `(health`,
+		"v3.2", "e.g.", "(test)", `"quoted"`, "...", "hello-world",
+	} {
 		if _, err := s.SearchDocs(context.Background(), libID, q, 10000); err != nil {
 			t.Errorf("SearchDocs(%q) returned error: %v", q, err)
 		}
@@ -183,6 +188,18 @@ func TestSearchSpecialCharacters(t *testing.T) {
 	}
 	if len(out.Results) != 1 {
 		t.Errorf("expected 1 result for literal search, got %d", len(out.Results))
+	}
+
+	// Quoting keeps the tokenizer's own behaviour: "v3.2" still tokenizes to
+	// v3/2 and "e.g." to e/g, so both still match the indexed text.
+	for _, q := range []string{"v3.2", "e.g."} {
+		out, err = s.SearchDocs(context.Background(), libID, q, 10000)
+		if err != nil {
+			t.Fatalf("SearchDocs(%q) error: %v", q, err)
+		}
+		if len(out.Results) != 1 {
+			t.Errorf("expected 1 result for %q, got %d", q, len(out.Results))
+		}
 	}
 }
 
@@ -198,6 +215,12 @@ func TestBuildFTSQuery(t *testing.T) {
 		{`say "hi"`, `"say" OR """hi"""`},
 		{"health AND", `"health" OR "AND"`},
 		{"path:foo NEAR(", `"path:foo" OR "NEAR("`},
+		{"e.g. configuration", `"e.g." OR "configuration"`},
+		{"v3.2.0", `"v3.2.0"`},
+		{"query with (parens)", `"query" OR "with" OR "(parens)"`},
+		{"dots.in.words special*chars", `"dots.in.words" OR "special*chars"`},
+		{"...", `"..."`},
+		{"hello --- world", `"hello" OR "---" OR "world"`},
 	}
 
 	for _, tc := range tests {

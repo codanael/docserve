@@ -18,16 +18,16 @@ type Provider interface {
 }
 
 // NewProvider constructs the appropriate Provider for cfg.
-func NewProvider(cfg config.SourceConfig, ref config.RefConfig, client *http.Client) (Provider, error) {
-	switch cfg.Provider {
+func NewProvider(src config.ResolvedSource, ref config.RefConfig, page config.PageConfig, client *http.Client) (Provider, error) {
+	switch src.Provider {
 	case "github":
-		return NewGitHubProvider(cfg, client), nil
+		return NewGitHubProvider(src, client), nil
 	case "azure-devops":
-		return NewAzureDevOpsProvider(cfg, client), nil
+		return NewAzureDevOpsProvider(src, client), nil
 	case "confluence":
-		return NewConfluenceProvider(cfg, ref, client), nil
+		return NewConfluenceProvider(src, page, client), nil
 	default:
-		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider)
+		return nil, fmt.Errorf("unknown provider: %s", src.Provider)
 	}
 }
 

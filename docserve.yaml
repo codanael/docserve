@@ -1,33 +1,34 @@
 data_dir: ./data
 listen: ":8080"
 
-sources:
-  - name: spring-boot
-    provider: github
-    repo: spring-projects/spring-boot
+providers:
+  - type: github
     proxy: false
-    refs:
-      - ref: main
-        paths:
-          - "documentation/spring-boot-docs/"
+    repos:
+      - name: spring-boot
+        slug: spring-projects/spring-boot
+        refs:
+          - ref: main
+            paths:
+              - "documentation/spring-boot-docs/"
 
-  - name: atlassian-confluence
-    provider: confluence
+  - type: confluence
     base_url: https://confluence.atlassian.com
     proxy: false
-    refs:
+    pages:
       - space: CONF
-        id: "1627457156"      # Info/Tip/Note/Warning Macros page
+        id: "1627457156"
         depth: 0
 
-  - name: apache-wiki
-    provider: confluence
+  - type: confluence
     base_url: https://cwiki.apache.org/confluence
     proxy: false
-    refs:
-      - space: KAFKA
-        id: "50859233"        # Kafka Improvement Proposals
+    pages:
+      - name: kafka-proposals
+        space: KAFKA
+        id: "50859233"
         depth: 1
-      - space: FLINK
-        id: "308152924"       # Creating a Flink CDC Release
+      - name: flink-release
+        space: FLINK
+        id: "308152924"
         depth: 0

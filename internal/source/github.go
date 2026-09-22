@@ -19,13 +19,13 @@ const defaultGitHubAPIURL = "https://api.github.com"
 
 // GitHubProvider fetches documentation from a GitHub repository.
 type GitHubProvider struct {
-	cfg    config.SourceConfig
+	cfg    config.ResolvedSource
 	client *http.Client
 	apiURL string
 }
 
 // NewGitHubProvider constructs a GitHubProvider with authentication applied.
-func NewGitHubProvider(cfg config.SourceConfig, client *http.Client) *GitHubProvider {
+func NewGitHubProvider(cfg config.ResolvedSource, client *http.Client) *GitHubProvider {
 	if client == nil {
 		client = &http.Client{}
 	}
@@ -42,7 +42,7 @@ func NewGitHubProvider(cfg config.SourceConfig, client *http.Client) *GitHubProv
 //   - "latest" → the tag_name of the latest GitHub release
 //   - anything else → the full commit SHA for that ref
 func (p *GitHubProvider) Resolve(ctx context.Context, ref string) (string, error) {
-	owner, repo, err := splitRepo(p.cfg.Repo)
+	owner, repo, err := splitRepo(p.cfg.Slug)
 	if err != nil {
 		return "", err
 	}
@@ -99,7 +99,7 @@ func (p *GitHubProvider) Resolve(ctx context.Context, ref string) (string, error
 // Fetch downloads the tarball for sha and extracts only files whose paths
 // match one of the given path prefixes into destDir.
 func (p *GitHubProvider) Fetch(ctx context.Context, sha string, paths []string, destDir string) error {
-	owner, repo, err := splitRepo(p.cfg.Repo)
+	owner, repo, err := splitRepo(p.cfg.Slug)
 	if err != nil {
 		return err
 	}

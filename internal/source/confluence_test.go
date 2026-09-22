@@ -81,18 +81,18 @@ func newConfluenceTestServer(t *testing.T, pages map[string]map[string]any, sear
 }
 
 func makeConfluenceProvider(srv *httptest.Server, depth *int) *ConfluenceProvider {
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "confluence",
 		BaseURL:  srv.URL,
 	}
-	ref := config.RefConfig{
+	page := config.PageConfig{
 		Space: "TEST",
 		ID:    "100",
 	}
 	if depth != nil {
-		ref.Depth = depth
+		page.Depth = depth
 	}
-	p := NewConfluenceProvider(cfg, ref, srv.Client())
+	p := NewConfluenceProvider(cfg, page, srv.Client())
 	p.apiURL = srv.URL
 	return p
 }
@@ -273,15 +273,15 @@ func TestConfluenceFetchSanitizesTitles(t *testing.T) {
 	srv := newConfluenceTestServer(t, pages, searchResults)
 	defer srv.Close()
 
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "confluence",
 		BaseURL:  srv.URL,
 	}
-	ref := config.RefConfig{
+	page := config.PageConfig{
 		Space: "TEST",
 		ID:    "100",
 	}
-	p := NewConfluenceProvider(cfg, ref, srv.Client())
+	p := NewConfluenceProvider(cfg, page, srv.Client())
 	p.apiURL = srv.URL
 
 	destDir := t.TempDir()
@@ -343,15 +343,15 @@ func TestConfluenceFetchRetryOn503(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cfg := config.SourceConfig{
+	cfg := config.ResolvedSource{
 		Provider: "confluence",
 		BaseURL:  srv.URL,
 	}
-	ref := config.RefConfig{
+	page := config.PageConfig{
 		Space: "TEST",
 		ID:    "100",
 	}
-	p := NewConfluenceProvider(cfg, ref, srv.Client())
+	p := NewConfluenceProvider(cfg, page, srv.Client())
 	p.apiURL = srv.URL
 
 	destDir := t.TempDir()

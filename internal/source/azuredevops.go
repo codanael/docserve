@@ -18,21 +18,27 @@ const defaultAzureDevOpsAPIURL = "https://dev.azure.com"
 
 // AzureDevOpsProvider fetches documentation from an Azure DevOps Git repository.
 type AzureDevOpsProvider struct {
-	cfg    config.SourceConfig
+	cfg    config.ResolvedSource
 	client *http.Client
 	apiURL string
 }
 
 // NewAzureDevOpsProvider constructs an AzureDevOpsProvider with authentication applied.
-func NewAzureDevOpsProvider(cfg config.SourceConfig, client *http.Client) *AzureDevOpsProvider {
+func NewAzureDevOpsProvider(cfg config.ResolvedSource, client *http.Client) *AzureDevOpsProvider {
 	if client == nil {
 		client = &http.Client{}
 	}
 	client = WrapClientAuth(client, cfg.Auth)
+
+	apiURL := cfg.BaseURL
+	if apiURL == "" {
+		apiURL = defaultAzureDevOpsAPIURL
+	}
+
 	return &AzureDevOpsProvider{
 		cfg:    cfg,
 		client: client,
-		apiURL: defaultAzureDevOpsAPIURL,
+		apiURL: apiURL,
 	}
 }
 
@@ -43,8 +49,8 @@ func NewAzureDevOpsProvider(cfg config.SourceConfig, client *http.Client) *Azure
 //	?searchCriteria.itemVersion.version={ref}&$top=1&api-version=7.0
 func (p *AzureDevOpsProvider) Resolve(ctx context.Context, ref string) (string, error) {
 	url := fmt.Sprintf(
-		"%s/%s/%s/_apis/git/repositories/%s/commits?searchCriteria.itemVersion.version=%s&$top=1&api-version=7.0",
-		p.apiURL, p.cfg.Org, p.cfg.Project, p.cfg.Repo, ref,
+		"%s/%s/_apis/git/repositories/%s/commits?searchCriteria.itemVersion.version=%s&$top=1&api-version=7.0",
+		p.apiURL, p.cfg.Project, p.cfg.Slug, ref,
 	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -89,8 +95,8 @@ func (p *AzureDevOpsProvider) Resolve(ctx context.Context, ref string) (string, 
 //	?path=/&$format=zip&versionDescriptor.version={sha}&versionDescriptor.versionType=commit&api-version=7.0
 func (p *AzureDevOpsProvider) Fetch(ctx context.Context, sha string, paths []string, destDir string) error {
 	url := fmt.Sprintf(
-		"%s/%s/%s/_apis/git/repositories/%s/items?path=/&$format=zip&versionDescriptor.version=%s&versionDescriptor.versionType=commit&api-version=7.0",
-		p.apiURL, p.cfg.Org, p.cfg.Project, p.cfg.Repo, sha,
+		"%s/%s/_apis/git/repositories/%s/items?path=/&$format=zip&versionDescriptor.version=%s&versionDescriptor.versionType=commit&api-version=7.0",
+		p.apiURL, p.cfg.Project, p.cfg.Slug, sha,
 	)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

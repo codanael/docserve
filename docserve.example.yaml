@@ -1,11 +1,13 @@
+# yaml-language-server: $schema=docserve.schema.json
+#
 # docserve example configuration
 # Copy to docserve.yaml and adjust to your environment.
 
-# Directory where fetched documentation is stored.
+# Directory where fetched documentation and the SQLite index are stored.
 # Defaults to "data" relative to the working directory.
 data_dir: /var/lib/docserve
 
-# Address on which the server listens.
+# Address on which the MCP server listens.
 # Defaults to ":8080".
 listen: ":8080"
 
@@ -22,73 +24,83 @@ listen: ":8080"
 #   - https://my-ai-app.example.com
 
 # Optional HTTP/HTTPS proxy used when fetching sources.
-# Individual sources can opt out by setting proxy: false.
+# Individual providers can opt out by setting proxy: false.
 proxy:
   http: http://proxy.example.com:3128
   https: http://proxy.example.com:3128
 
-sources:
-  # GitHub source example — uses bearer token auth via GITHUB_TOKEN env var.
-  - name: my-github-docs
-    provider: github
-    repo: myorg/myrepo        # owner/repo
-    proxy: true               # use the global proxy (this is the default)
-    schedule: "0 * * * *"     # cron expression; omit to disable scheduled sync
+providers:
+  # ─── GitHub ────────────────────────────────────────────────────────────
+  # Fetches documentation from GitHub repositories via the archive API.
+  - type: github
+    proxy: true                     # use the global proxy (this is the default)
+    schedule: "0 * * * *"           # cron expression; omit to disable scheduled sync
     auth:
       type: bearer
-      token_env: GITHUB_TOKEN # name of the environment variable holding the token
-    refs:
-      - ref: main             # branch, tag, or commit SHA
-        paths:
-          - docs/             # directory (trailing slash) or exact file path
-          - README.md
-      - ref: v2.0             # index a second branch/tag from the same repo
-        name: my-docs-v2      # optional: override the default library name
-        paths:
-          - docs/
+      token_env: GITHUB_TOKEN       # name of the env var holding the token
+    repos:
+      - name: my-docs
+        slug: myorg/myrepo          # owner/repo on github.com
+        refs:
+          - ref: main               # branch, tag, or commit SHA
+            paths:
+              - docs/               # directory (trailing slash) or exact file path
+              - README.md
+          - ref: v2.0               # index a second branch/tag from the same repo
+            name: my-docs-v2        # optional: override the default library name
+            paths:
+              - docs/
 
-  # Azure DevOps source example — uses basic auth.
+      # A second repo with its own auth and schedule overrides.
+      - name: private-docs
+        slug: myorg/private-repo
+        auth:
+          type: bearer
+          token_env: PRIVATE_REPO_TOKEN   # overrides the provider-level auth
+        schedule: "*/30 * * * *"          # overrides the provider-level schedule
+        refs:
+          - ref: main
+            paths:
+              - wiki/
+
+  # ─── Azure DevOps ──────────────────────────────────────────────────────
+  # Fetches documentation from Azure DevOps Git repositories.
   # Uncomment and fill in to enable.
   #
-  # - name: my-azure-docs
-  #   provider: azure-devops
-  #   org: myorg              # Azure DevOps organisation
-  #   project: myproject      # Azure DevOps project
-  #   repo: myrepo            # Git repository name
-  #   base_url: https://dev.azure.com
-  #   proxy: false            # bypass the global proxy for this source
+  # - type: azure-devops
+  #   base_url: https://dev.azure.com/myorg   # organisation in the URL
+  #   proxy: false                             # bypass the global proxy
   #   schedule: "30 * * * *"
   #   auth:
   #     type: basic
   #     username_env: ADO_USER
   #     password_env: ADO_PAT
-  #   refs:
-  #     - ref: refs/heads/main
-  #       paths:
-  #         - wiki/
+  #   repos:
+  #     - name: my-azure-docs
+  #       slug: myrepo                         # Git repository name
+  #       project: myproject                   # Azure DevOps project
+  #       refs:
+  #         - ref: refs/heads/main
+  #           paths:
+  #             - wiki/
 
-  # Confluence source example — uses personal access token.
-  # Each ref targets a specific page (by space + page ID) and its descendants.
+  # ─── Confluence ────────────────────────────────────────────────────────
+  # Fetches pages (and optionally their descendants) from Confluence.
+  # Each page entry targets a specific page by space key + page ID.
   # Uncomment and fill in to enable.
   #
-  # - name: my-confluence-docs
-  #   provider: confluence
-  #   base_url: https://confluence.example.com  # Confluence instance URL
+  # - type: confluence
+  #   base_url: https://confluence.example.com   # Confluence instance URL
   #   proxy: false
   #   schedule: "0 */4 * * *"
   #   auth:
   #     type: bearer
-  #     token_env: CONFLUENCE_PAT  # personal access token (DC 7.9+)
-  #   refs:
-  #     - space: DEV                   # Confluence space key
-  #       id: "123456"                 # page ID of the root page to index
-  #       depth: 3                     # subtree depth: 0=root only, -1=unlimited (default)
-  #     - space: ARCH
+  #     token_env: CONFLUENCE_PAT                # personal access token (DC 7.9+)
+  #   pages:
+  #     - space: DEV
+  #       id: "123456"                           # page ID of the root page to index
+  #       depth: 3                               # 0 = root only, -1 = unlimited
+  #     - name: architecture-decisions           # optional: override library name
+  #       space: ARCH
   #       id: "789012"
-  #       name: architecture-decisions  # optional: override library name
-  #
-  # # Alternative auth: basic auth (username + password/token)
-  # # auth:
-  # #   type: basic
-  # #   username_env: CONFLUENCE_USER
-  # #   password_env: CONFLUENCE_PASS
+  #       depth: 0

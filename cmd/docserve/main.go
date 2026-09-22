@@ -110,39 +110,76 @@ func cmdServe(args []string) {
 
 	proxied, direct := buildClients(cfg)
 
+	sources := config.FlattenProviders(cfg.Providers)
+
 	sched := scheduler.New(func(name string) {
-		for _, src := range cfg.Sources {
-			for _, ref := range src.Refs {
-				libName := config.LibraryName(src, ref)
-				if libName != name {
-					continue
+		for _, src := range sources {
+			client := proxied
+			if !src.Proxy {
+				client = direct
+			}
+			switch src.Provider {
+			case "confluence":
+				for _, page := range src.Pages {
+					libName := config.LibraryName(src.Provider, "", config.RefConfig{}, page)
+					if libName != name {
+						continue
+					}
+					prov, err := source.NewProvider(src, config.RefConfig{}, page, client)
+					if err != nil {
+						log.Printf("[scheduler] %s: %v", name, err)
+						return
+					}
+					fetcher := source.NewFetcher(store, cfg.DataDir)
+					result, err := fetcher.FetchSource(context.Background(), src, config.RefConfig{}, page, libName, prov)
+					if err != nil {
+						log.Printf("[scheduler] %s: %v", name, err)
+						return
+					}
+					if result.Updated {
+						log.Printf("[scheduler] %s: updated %d chunks", name, result.ChunkCount)
+					}
 				}
-				client := proxied
-				if !src.Proxy {
-					client = direct
-				}
-				prov, err := source.NewProvider(src, ref, client)
-				if err != nil {
-					log.Printf("[scheduler] %s: %v", name, err)
-					return
-				}
-				fetcher := source.NewFetcher(store, cfg.DataDir)
-				result, err := fetcher.FetchSource(context.Background(), src, ref, libName, prov)
-				if err != nil {
-					log.Printf("[scheduler] %s: %v", name, err)
-					return
-				}
-				if result.Updated {
-					log.Printf("[scheduler] %s: updated %d chunks", name, result.ChunkCount)
+			default:
+				for _, ref := range src.Refs {
+					libName := config.LibraryName(src.Provider, src.Name, ref, config.PageConfig{})
+					if libName != name {
+						continue
+					}
+					prov, err := source.NewProvider(src, ref, config.PageConfig{}, client)
+					if err != nil {
+						log.Printf("[scheduler] %s: %v", name, err)
+						return
+					}
+					fetcher := source.NewFetcher(store, cfg.DataDir)
+					result, err := fetcher.FetchSource(context.Background(), src, ref, config.PageConfig{}, libName, prov)
+					if err != nil {
+						log.Printf("[scheduler] %s: %v", name, err)
+						return
+					}
+					if result.Updated {
+						log.Printf("[scheduler] %s: updated %d chunks", name, result.ChunkCount)
+					}
 				}
 			}
 		}
 	})
 
-	for _, src := range cfg.Sources {
-		if src.Schedule != "" {
+	for _, src := range sources {
+		if src.Schedule == "" {
+			continue
+		}
+		switch src.Provider {
+		case "confluence":
+			for _, page := range src.Pages {
+				libName := config.LibraryName(src.Provider, "", config.RefConfig{}, page)
+				if err := sched.Add(libName, src.Schedule); err != nil {
+					log.Printf("warning: %v", err)
+				}
+			}
+		default:
 			for _, ref := range src.Refs {
-				libName := config.LibraryName(src, ref)
+				libName := config.LibraryName(src.Provider, src.Name, ref, config.PageConfig{})
 				if err := sched.Add(libName, src.Schedule); err != nil {
 					log.Printf("warning: %v", err)
 				}
@@ -221,36 +258,68 @@ func cmdFetch(args []string) {
 
 	ctx := context.Background()
 
-	for _, src := range cfg.Sources {
+	sources := config.FlattenProviders(cfg.Providers)
+
+	for _, src := range sources {
 		client := proxied
 		if !src.Proxy {
 			client = direct
 		}
 
-		for _, ref := range src.Refs {
-			libName := config.LibraryName(src, ref)
+		switch src.Provider {
+		case "confluence":
+			for _, page := range src.Pages {
+				libName := config.LibraryName(src.Provider, "", config.RefConfig{}, page)
 
-			if *sourceName != "" && libName != *sourceName && src.Name != *sourceName {
-				continue
+				if *sourceName != "" && libName != *sourceName && src.Name != *sourceName {
+					continue
+				}
+
+				authClient := source.WrapClientAuth(client, src.Auth)
+				prov, err := source.NewProvider(src, config.RefConfig{}, page, authClient)
+				if err != nil {
+					log.Printf("[%s] error creating provider: %v", libName, err)
+					continue
+				}
+
+				result, err := fetcher.FetchSource(ctx, src, config.RefConfig{}, page, libName, prov)
+				if err != nil {
+					log.Printf("[%s] fetch error: %v", libName, err)
+					continue
+				}
+
+				if result.Updated {
+					log.Printf("[%s] updated: sha=%s chunks=%d", result.Source, result.SHA, result.ChunkCount)
+				} else {
+					log.Printf("[%s] already up to date: sha=%s", result.Source, result.SHA)
+				}
 			}
+		default:
+			for _, ref := range src.Refs {
+				libName := config.LibraryName(src.Provider, src.Name, ref, config.PageConfig{})
 
-			authClient := source.WrapClientAuth(client, src.Auth)
-			prov, err := source.NewProvider(src, ref, authClient)
-			if err != nil {
-				log.Printf("[%s] error creating provider: %v", libName, err)
-				continue
-			}
+				if *sourceName != "" && libName != *sourceName && src.Name != *sourceName {
+					continue
+				}
 
-			result, err := fetcher.FetchSource(ctx, src, ref, libName, prov)
-			if err != nil {
-				log.Printf("[%s] fetch error: %v", libName, err)
-				continue
-			}
+				authClient := source.WrapClientAuth(client, src.Auth)
+				prov, err := source.NewProvider(src, ref, config.PageConfig{}, authClient)
+				if err != nil {
+					log.Printf("[%s] error creating provider: %v", libName, err)
+					continue
+				}
 
-			if result.Updated {
-				log.Printf("[%s] updated: sha=%s chunks=%d", result.Source, result.SHA, result.ChunkCount)
-			} else {
-				log.Printf("[%s] already up to date: sha=%s", result.Source, result.SHA)
+				result, err := fetcher.FetchSource(ctx, src, ref, config.PageConfig{}, libName, prov)
+				if err != nil {
+					log.Printf("[%s] fetch error: %v", libName, err)
+					continue
+				}
+
+				if result.Updated {
+					log.Printf("[%s] updated: sha=%s chunks=%d", result.Source, result.SHA, result.ChunkCount)
+				} else {
+					log.Printf("[%s] already up to date: sha=%s", result.Source, result.SHA)
+				}
 			}
 		}
 	}
