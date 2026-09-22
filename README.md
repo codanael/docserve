@@ -59,6 +59,11 @@ See [`docserve.example.yaml`](docserve.example.yaml) for a fully commented refer
 
 Credentials are always read from environment variables referenced by name in the config (`token_env`, `username_env`, `password_env`).
 
+Two optional top-level keys control the MCP endpoint:
+
+- `auth_token_env` -- name of an environment variable holding a bearer token. When set, `/mcp` requires `Authorization: Bearer <token>`. Without it the endpoint is open; only do that on a trusted network.
+- `allowed_origins` -- browser origins allowed to call `/mcp` besides loopback origins. Requests without an `Origin` header are always accepted; foreign origins get `403`.
+
 ### Config resolution order
 
 1. `--config <path>` flag
@@ -88,6 +93,8 @@ docserve version
 
 ### MCP Client Configuration
 
+docserve speaks MCP specification revision 2026-07-28 and also serves clients on the 2025-11-25, 2025-06-18 and 2025-03-26 revisions through the same `/mcp` endpoint. The transport is stateless: no `Mcp-Session-Id` is issued or required.
+
 Point your MCP client at the server's `/mcp` endpoint:
 
 ```json
@@ -95,11 +102,26 @@ Point your MCP client at the server's `/mcp` endpoint:
   "mcpServers": {
     "docserve": {
       "type": "streamable-http",
-      "url": "http://localhost:8080/mcp"
+      "url": "http://localhost:8080/mcp",
+      "headers": {
+        "Authorization": "Bearer ${DOCSERVE_TOKEN}"
+      }
     }
   }
 }
 ```
+
+Drop the `headers` block when `auth_token_env` is not configured.
+
+Tools:
+
+| Tool | Purpose | Output |
+|---|---|---|
+| `list-libraries` | Browse every indexed library | structured `{"libraries": [...]}` + JSON text |
+| `resolve-library` | Exact name from a partial name | structured `{"name", "ref"}` + JSON text |
+| `get-library-docs` | BM25 search inside one library | markdown chunks, with a truncation notice when results were cut |
+
+All tools are read-only and idempotent. Request bodies are capped at 1 MiB.
 
 ### Health Checks
 

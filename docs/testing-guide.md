@@ -28,7 +28,7 @@ Content-Type: application/json
 Accept: application/json, text/event-stream
 ```
 
-After initialization, every request must include the `Mcp-Session-Id` header.
+The transport is stateless: no `Mcp-Session-Id` is issued and none is required. The `initialize` step below is what legacy (pre-2026-07-28) clients send; modern clients call `server/discover` instead. Both work without prior setup. If `auth_token_env` is configured, add `-H "Authorization: Bearer $DOCSERVE_TOKEN"` to every `/mcp` request.
 
 ### 1. Start the server
 
@@ -36,10 +36,10 @@ After initialization, every request must include the `Mcp-Session-Id` header.
 bin/docserve serve
 ```
 
-### 2. Initialize a session
+### 2. Initialize (legacy handshake, optional)
 
 ```bash
-SESSION=$(curl -si -X POST http://localhost:8080/mcp \
+curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -d '{
@@ -51,9 +51,7 @@ SESSION=$(curl -si -X POST http://localhost:8080/mcp \
       "capabilities": {},
       "clientInfo": {"name": "curl-test", "version": "1.0"}
     }
-  }' | grep -i mcp-session-id | cut -d' ' -f2 | tr -d '\r')
-
-echo "Session: $SESSION"
+  }' | jq .
 ```
 
 ### 3. Send the initialized notification
@@ -62,7 +60,6 @@ echo "Session: $SESSION"
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SESSION" \
   -d '{"jsonrpc": "2.0", "method": "notifications/initialized"}'
 ```
 
@@ -72,7 +69,6 @@ curl -s -X POST http://localhost:8080/mcp \
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SESSION" \
   -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}' | jq .
 ```
 
@@ -82,7 +78,6 @@ curl -s -X POST http://localhost:8080/mcp \
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SESSION" \
   -d '{
     "jsonrpc": "2.0",
     "id": 3,
@@ -100,7 +95,6 @@ curl -s -X POST http://localhost:8080/mcp \
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SESSION" \
   -d '{
     "jsonrpc": "2.0",
     "id": 4,
@@ -118,7 +112,6 @@ curl -s -X POST http://localhost:8080/mcp \
 curl -s -X POST http://localhost:8080/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
-  -H "Mcp-Session-Id: $SESSION" \
   -d '{
     "jsonrpc": "2.0",
     "id": 5,
@@ -134,11 +127,25 @@ curl -s -X POST http://localhost:8080/mcp \
   }' | jq .
 ```
 
-### 8. Close the session
+### 8. Discover (2026-07-28 clients)
 
 ```bash
-curl -s -X DELETE http://localhost:8080/mcp \
-  -H "Mcp-Session-Id: $SESSION"
+curl -s -X POST http://localhost:8080/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "MCP-Protocol-Version: 2026-07-28" \
+  -H "Mcp-Method: server/discover" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 9,
+    "method": "server/discover",
+    "params": {
+      "_meta": {
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {}
+      }
+    }
+  }' | jq .
 ```
 
 ## MCP Inspector
@@ -159,6 +166,15 @@ npx -y @modelcontextprotocol/inspector \
   --tool-arg library=spring-boot \
   --tool-arg query="auto configuration" \
   --tool-arg max_tokens=2000
+```
+
+## Conformance Suite
+
+The official conformance tests validate the transport and tool behaviour against the specification:
+
+```bash
+npx -y @modelcontextprotocol/conformance server --url http://127.0.0.1:8080/mcp
+npx -y @modelcontextprotocol/conformance server --url http://127.0.0.1:8080/mcp --spec-version 2025-11-25
 ```
 
 ## CLI Commands

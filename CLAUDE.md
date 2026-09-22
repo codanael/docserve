@@ -38,7 +38,11 @@ Direct modules (everything else is stdlib):
 - **Per-source proxy routing**: each source declares `proxy: true/false`. Two `http.Client` instances (proxied + direct) are created at startup.
 - **Auth via env vars only**: credentials are never in the YAML config. `token_env`, `username_env`, `password_env` reference environment variable names.
 - **FTS5 search**: BM25 ranking with weights (path=1.5, breadcrumb=2.0, content=1.0). Token budget caps results. Semantic search is a future extension.
-- **MCP tool output**: `list-libraries` and `resolve-library` return `structuredContent` + JSON text fallback. `get-library-docs` returns human-readable markdown text (not JSON).
+- **MCP transport is stateless** (`server.WithStateLess(true)`): no `Mcp-Session-Id`; mcp-go v1.1.0 serves 2026-07-28 (`server/discover`) and legacy `initialize` clients on the same `/mcp` endpoint.
+- **HTTP hardening lives in `internal/mcp/middleware.go`**: Origin check (loopback + `allowed_origins`), optional bearer auth (`auth_token_env`), 1 MiB body cap. Health endpoints bypass all of it.
+- **Tools are strict**: `WithInputSchemaValidation` + `WithStrictInputSchemaDefault`; handlers use `RequireString`. All tools declare `readOnly/idempotent=true`, `destructive/openWorld=false`, a `title`, and (for the two JSON tools) an `outputSchema`.
+- **MCP tool output**: `list-libraries` returns `{"libraries": [...]}` and `resolve-library` returns `{"name","ref"}` as `structuredContent` + JSON text fallback. `get-library-docs` returns markdown text and appends a truncation notice when `SearchOutput.Truncated` is set.
+- **Search queries are escaped**: FTS5 terms are quoted (`buildFTSQuery`), LIKE wildcards escaped (`escapeLike`). Store read methods take a `context.Context`.
 - **Transactional indexation**: chunks are replaced atomically per library in a single SQLite transaction.
 
 ## Testing
@@ -46,6 +50,7 @@ Direct modules (everything else is stdlib):
 - Unit tests: `go test ./...` (chunkers, config, store, search, tools, scheduler)
 - Integration: `go test -tags=integration ./...` (full MCP protocol: init → tools/list → tools/call → verify)
 - MCP Inspector: `npx @modelcontextprotocol/inspector --cli http://localhost:8080/mcp --method tools/list`
+- Conformance: `npx -y @modelcontextprotocol/conformance server --url http://127.0.0.1:8080/mcp`
 
 ## Adding a New Provider
 

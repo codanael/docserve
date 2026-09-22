@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Optional bearer-token authentication for `/mcp` (`auth_token_env`)
+- Origin validation with `allowed_origins`; foreign browser origins get 403
+- Tool `title`, `outputSchema` for `list-libraries` and `resolve-library`, server `instructions`
+- Truncation notice at the end of `get-library-docs` output when results were cut
+- Tool-call and protocol-error logging
+
+### Changed
+- mcp-go bumped to v1.1.0: MCP specification 2026-07-28 with legacy fallback; transport is now stateless (no `Mcp-Session-Id`)
+- `list-libraries` structured output is now an object `{"libraries": [...]}` and includes `repo` and `commit_sha`
+- Tool arguments are validated against their schema; unknown or missing arguments return `isError` results
+- `openWorldHint` is now `false` on all tools
+- HTTP server timeouts and a 1 MiB request body limit
+
+### Fixed
+- FTS5 operators and quotes in queries no longer cause SQLite syntax errors
+- `%` and `_` in `resolve-library` queries are matched literally
+- Store read queries honour request cancellation
+
 ## [1.0.0] - 2026-04-11
 
 ### Added
