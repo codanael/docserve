@@ -133,6 +133,40 @@ func TestStoreLibraryCRUD(t *testing.T) {
 	}
 }
 
+func TestFindLibrariesEscapesWildcards(t *testing.T) {
+	s, err := OpenStore(":memory:")
+	if err != nil {
+		t.Fatalf("OpenStore error: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+
+	for _, name := range []string{"angular", "spring-boot", "my_lib"} {
+		if _, err := s.UpsertLibrary(Library{Name: name, Repo: "r/" + name, Ref: "main", CommitSHA: "x", FetchedAt: time.Now().UTC()}); err != nil {
+			t.Fatalf("UpsertLibrary %s: %v", name, err)
+		}
+	}
+
+	cases := []struct {
+		query string
+		want  int
+	}{
+		{"%", 0},      // literal percent matches nothing
+		{"_ng", 0},    // underscore is not a single-char wildcard
+		{"my_lib", 1}, // literal underscore still matches
+		{"ng", 2},     // plain substring works ("angular" and "spring-boot" both contain "ng")
+		{"", 3},       // empty query matches everything
+	}
+	for _, tc := range cases {
+		libs, err := s.FindLibraries(tc.query)
+		if err != nil {
+			t.Fatalf("FindLibraries(%q) error: %v", tc.query, err)
+		}
+		if len(libs) != tc.want {
+			t.Errorf("FindLibraries(%q) = %d libraries, want %d", tc.query, len(libs), tc.want)
+		}
+	}
+}
+
 func TestStoreChunks(t *testing.T) {
 	s, err := OpenStore(":memory:")
 	if err != nil {

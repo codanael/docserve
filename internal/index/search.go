@@ -5,15 +5,21 @@ import (
 	"strings"
 )
 
-// buildFTSQuery transforms a plain text query into an FTS5 OR query.
-// "database configuration" → "database OR configuration"
+// buildFTSQuery transforms a plain text query into an FTS5 OR query in which
+// every whitespace-separated term is quoted as an FTS5 string, so operators,
+// parentheses and column filters typed by the caller are matched literally.
+// "database configuration" → `"database" OR "configuration"`
 // Empty input returns "".
 func buildFTSQuery(input string) string {
 	words := strings.Fields(input)
 	if len(words) == 0 {
 		return ""
 	}
-	return strings.Join(words, " OR ")
+	quoted := make([]string, len(words))
+	for i, w := range words {
+		quoted[i] = `"` + strings.ReplaceAll(w, `"`, `""`) + `"`
+	}
+	return strings.Join(quoted, " OR ")
 }
 
 // SearchDocs performs an FTS5 search using BM25 ranking and returns results

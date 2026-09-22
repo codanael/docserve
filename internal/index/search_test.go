@@ -112,15 +112,43 @@ func TestSearchNoResults(t *testing.T) {
 	}
 }
 
+func TestSearchSpecialCharacters(t *testing.T) {
+	s, libID := testLibrary(t)
+
+	chunks := []Chunk{
+		{Path: "docs/health.md", Breadcrumb: "Health", Content: "The health endpoint reports status."},
+	}
+	if err := s.ReplaceChunks(libID, chunks); err != nil {
+		t.Fatalf("ReplaceChunks error: %v", err)
+	}
+
+	for _, q := range []string{`health AND`, `NEAR(`, `"health`, `path:health`, `health OR NOT`, `(health`} {
+		if _, err := s.SearchDocs(libID, q, 10000); err != nil {
+			t.Errorf("SearchDocs(%q) returned error: %v", q, err)
+		}
+	}
+
+	results, err := s.SearchDocs(libID, `health AND`, 10000)
+	if err != nil {
+		t.Fatalf("SearchDocs error: %v", err)
+	}
+	if len(results) != 1 {
+		t.Errorf("expected 1 result for literal search, got %d", len(results))
+	}
+}
+
 func TestBuildFTSQuery(t *testing.T) {
 	tests := []struct {
 		input string
 		want  string
 	}{
-		{"database configuration", "database OR configuration"},
-		{"single", "single"},
-		{"  spaced  words  ", "spaced OR words"},
+		{"database configuration", `"database" OR "configuration"`},
+		{"single", `"single"`},
+		{"  spaced  words  ", `"spaced" OR "words"`},
 		{"", ""},
+		{`say "hi"`, `"say" OR """hi"""`},
+		{"health AND", `"health" OR "AND"`},
+		{"path:foo NEAR(", `"path:foo" OR "NEAR("`},
 	}
 
 	for _, tc := range tests {

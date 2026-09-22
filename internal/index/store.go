@@ -3,6 +3,7 @@ package index
 import (
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -196,10 +197,16 @@ func (s *Store) Ready() bool {
 	return err == nil && count > 0
 }
 
+// escapeLike escapes the LIKE wildcard characters so that user input is
+// matched literally. Must be used with `ESCAPE '\'`.
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
 // FindLibraries returns libraries whose name matches the given query (LIKE %query%).
 func (s *Store) FindLibraries(query string) ([]Library, error) {
-	const q = `SELECT id, name, repo, ref, commit_sha, fetched_at FROM libraries WHERE name LIKE ? ORDER BY name`
-	rows, err := s.db.Query(q, "%"+query+"%")
+	const q = `SELECT id, name, repo, ref, commit_sha, fetched_at FROM libraries WHERE name LIKE ? ESCAPE '\' ORDER BY name`
+	rows, err := s.db.Query(q, "%"+escapeLike(query)+"%")
 	if err != nil {
 		return nil, fmt.Errorf("find libraries: %w", err)
 	}
