@@ -316,18 +316,18 @@ func cmdSearch(args []string) {
 		os.Exit(1)
 	}
 
-	results, err := store.SearchDocs(context.Background(), lib.ID, query, *maxTokens)
+	out, err := store.SearchDocs(context.Background(), lib.ID, query, *maxTokens)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error searching: %v\n", err)
 		os.Exit(1)
 	}
 
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		fmt.Printf("No results for %q in library %q.\n", query, libraryName)
 		return
 	}
 
-	for i, r := range results {
+	for i, r := range out.Results {
 		fmt.Printf("--- Result %d: %s", i+1, r.Path)
 		if r.Breadcrumb != "" {
 			fmt.Printf(" (%s)", r.Breadcrumb)
@@ -335,6 +335,9 @@ func cmdSearch(args []string) {
 		fmt.Println()
 		fmt.Println(r.Content)
 		fmt.Println()
+	}
+	if out.Truncated {
+		fmt.Println("(more results omitted; refine the query or raise --max-tokens)")
 	}
 }
 

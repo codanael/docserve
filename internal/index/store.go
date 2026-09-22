@@ -35,6 +35,14 @@ type SearchResult struct {
 	Score      float64
 }
 
+// SearchOutput is the result of a documentation search.
+type SearchOutput struct {
+	Results []SearchResult
+	// Truncated is true when more matching chunks existed but were dropped
+	// because of the row limit or the token budget.
+	Truncated bool
+}
+
 // Store holds the SQLite database connection.
 type Store struct {
 	db *sql.DB

@@ -96,19 +96,19 @@ func (h *ToolHandlers) GetLibraryDocs(ctx context.Context, req mcplib.CallToolRe
 		return mcplib.NewToolResultError(fmt.Sprintf("library %q not found", library)), nil
 	}
 
-	results, err := h.Store.SearchDocs(ctx, lib.ID, query, maxTokens)
+	out, err := h.Store.SearchDocs(ctx, lib.ID, query, maxTokens)
 	if err != nil {
 		return mcplib.NewToolResultError(fmt.Sprintf("search failed: %v", err)), nil
 	}
 
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		return mcplib.NewToolResultText(fmt.Sprintf("No results found for %q in %s (%s).", query, lib.Name, lib.Ref)), nil
 	}
 
 	var b strings.Builder
-	fmt.Fprintf(&b, "# %s (%s) — %d results\n\n", lib.Name, lib.Ref, len(results))
+	fmt.Fprintf(&b, "# %s (%s) — %d results\n\n", lib.Name, lib.Ref, len(out.Results))
 
-	for i, r := range results {
+	for i, r := range out.Results {
 		if i > 0 {
 			b.WriteString("\n---\n\n")
 		}

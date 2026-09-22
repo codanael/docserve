@@ -211,18 +211,18 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Search
-	results, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
+	out, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search error: %v", err)
 	}
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		t.Error("expected search results, got none")
 	}
 	// Top result should be api.md since it talks about querying
-	if results[0].Path != "docs/api.md" {
-		t.Logf("top result path: %q (expected docs/api.md, may vary by ranking)", results[0].Path)
+	if out.Results[0].Path != "docs/api.md" {
+		t.Logf("top result path: %q (expected docs/api.md, may vary by ranking)", out.Results[0].Path)
 	}
-	for _, r := range results {
+	for _, r := range out.Results {
 		if r.Score == 0 {
 			t.Errorf("result for %q has zero score", r.Path)
 		}
@@ -246,22 +246,22 @@ func TestStoreChunks(t *testing.T) {
 	}
 
 	// Old search should return no result (or only new content)
-	results2, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
+	out2, err := s.SearchDocs(context.Background(), libID, "database querying", 10000)
 	if err != nil {
 		t.Fatalf("Search after replace error: %v", err)
 	}
-	for _, r := range results2 {
+	for _, r := range out2.Results {
 		if r.Path == "docs/api.md" {
 			t.Errorf("old chunk docs/api.md still present after ReplaceChunks")
 		}
 	}
 
 	// New content should be searchable
-	results3, err := s.SearchDocs(context.Background(), libID, "new content", 10000)
+	out3, err := s.SearchDocs(context.Background(), libID, "new content", 10000)
 	if err != nil {
 		t.Fatalf("Search for new content error: %v", err)
 	}
-	if len(results3) == 0 {
+	if len(out3.Results) == 0 {
 		t.Error("expected results for new content, got none")
 	}
 }

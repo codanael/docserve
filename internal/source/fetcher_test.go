@@ -134,11 +134,11 @@ func TestFetchPipeline(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLibrary: %v", err)
 	}
-	results, err := store.SearchDocs(ctx, lib.ID, "unique_token_xyz", 100000)
+	out, err := store.SearchDocs(ctx, lib.ID, "unique_token_xyz", 100000)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		t.Error("search after third fetch: expected at least one result for 'unique_token_xyz'")
 	}
 }

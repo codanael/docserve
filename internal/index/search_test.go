@@ -47,17 +47,17 @@ func TestSearchRanking(t *testing.T) {
 		t.Fatalf("ReplaceChunks error: %v", err)
 	}
 
-	results, err := s.SearchDocs(context.Background(), libID, "database configuration", 10000)
+	out, err := s.SearchDocs(context.Background(), libID, "database configuration", 10000)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		t.Fatal("expected results, got none")
 	}
 	// The chunk with "Database Configuration" in the breadcrumb should rank first
 	// because breadcrumb has weight 2.0 vs content weight 1.0.
-	if results[0].Path != "docs/db.md" {
-		t.Errorf("expected docs/db.md to rank first (breadcrumb boost), got %q", results[0].Path)
+	if out.Results[0].Path != "docs/db.md" {
+		t.Errorf("expected docs/db.md to rank first (breadcrumb boost), got %q", out.Results[0].Path)
 	}
 }
 
@@ -78,15 +78,63 @@ func TestSearchTokenBudget(t *testing.T) {
 		t.Fatalf("ReplaceChunks error: %v", err)
 	}
 
-	results, err := s.SearchDocs(context.Background(), libID, "budget test keyword", 100)
+	out, err := s.SearchDocs(context.Background(), libID, "budget test keyword", 100)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
-	if len(results) == 0 {
+	if len(out.Results) == 0 {
 		t.Fatal("expected at least one result")
 	}
-	if len(results) > 5 {
-		t.Errorf("expected <=5 results with maxTokens=100, got %d", len(results))
+	if len(out.Results) > 5 {
+		t.Errorf("expected <=5 results with maxTokens=100, got %d", len(out.Results))
+	}
+	if !out.Truncated {
+		t.Error("expected Truncated=true when the budget cuts results")
+	}
+}
+
+func TestSearchRowLimit(t *testing.T) {
+	s, libID := testLibrary(t)
+
+	chunks := make([]Chunk, maxSearchRows+10)
+	for i := range chunks {
+		chunks[i] = Chunk{
+			Path:       fmt.Sprintf("docs/page%03d.md", i),
+			Breadcrumb: fmt.Sprintf("Page %d", i),
+			Content:    fmt.Sprintf("rowlimit keyword number %03d", i),
+		}
+	}
+	if err := s.ReplaceChunks(libID, chunks); err != nil {
+		t.Fatalf("ReplaceChunks error: %v", err)
+	}
+
+	out, err := s.SearchDocs(context.Background(), libID, "rowlimit", 1_000_000)
+	if err != nil {
+		t.Fatalf("SearchDocs error: %v", err)
+	}
+	if len(out.Results) != maxSearchRows {
+		t.Errorf("expected %d results, got %d", maxSearchRows, len(out.Results))
+	}
+	if !out.Truncated {
+		t.Error("expected Truncated=true when more rows exist than the row limit")
+	}
+}
+
+func TestSearchNotTruncated(t *testing.T) {
+	s, libID := testLibrary(t)
+	if err := s.ReplaceChunks(libID, []Chunk{
+		{Path: "a.md", Breadcrumb: "A", Content: "small corpus alpha"},
+		{Path: "b.md", Breadcrumb: "B", Content: "small corpus beta"},
+	}); err != nil {
+		t.Fatalf("ReplaceChunks error: %v", err)
+	}
+
+	out, err := s.SearchDocs(context.Background(), libID, "corpus", 10000)
+	if err != nil {
+		t.Fatalf("SearchDocs error: %v", err)
+	}
+	if len(out.Results) != 2 || out.Truncated {
+		t.Errorf("expected 2 results and Truncated=false, got %d results, Truncated=%v", len(out.Results), out.Truncated)
 	}
 }
 
@@ -104,12 +152,12 @@ func TestSearchNoResults(t *testing.T) {
 		t.Fatalf("ReplaceChunks error: %v", err)
 	}
 
-	results, err := s.SearchDocs(context.Background(), libID, "xyznonexistentterm", 10000)
+	out, err := s.SearchDocs(context.Background(), libID, "xyznonexistentterm", 10000)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
-	if len(results) != 0 {
-		t.Errorf("expected 0 results, got %d", len(results))
+	if len(out.Results) != 0 {
+		t.Errorf("expected 0 results, got %d", len(out.Results))
 	}
 }
 
@@ -129,12 +177,12 @@ func TestSearchSpecialCharacters(t *testing.T) {
 		}
 	}
 
-	results, err := s.SearchDocs(context.Background(), libID, `health AND`, 10000)
+	out, err := s.SearchDocs(context.Background(), libID, `health AND`, 10000)
 	if err != nil {
 		t.Fatalf("SearchDocs error: %v", err)
 	}
-	if len(results) != 1 {
-		t.Errorf("expected 1 result for literal search, got %d", len(results))
+	if len(out.Results) != 1 {
+		t.Errorf("expected 1 result for literal search, got %d", len(out.Results))
 	}
 }
 

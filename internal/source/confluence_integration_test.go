@@ -162,27 +162,27 @@ func TestConfluenceIntegration(t *testing.T) {
 	// ---------------------------------------------------------------
 	// 5. Search for "npm install"
 	// ---------------------------------------------------------------
-	npmResults, err := store.SearchDocs(ctx, lib.ID, "npm install", 4000)
+	npmOut, err := store.SearchDocs(ctx, lib.ID, "npm install", 4000)
 	if err != nil {
 		t.Fatalf("SearchDocs(npm install): %v", err)
 	}
-	if len(npmResults) == 0 {
+	if len(npmOut.Results) == 0 {
 		t.Error("expected search results for 'npm install', got none")
 	} else {
-		t.Logf("search 'npm install': %d results, first path=%s", len(npmResults), npmResults[0].Path)
+		t.Logf("search 'npm install': %d results, first path=%s", len(npmOut.Results), npmOut.Results[0].Path)
 	}
 
 	// ---------------------------------------------------------------
 	// 6. Search for "api users"
 	// ---------------------------------------------------------------
-	apiResults, err := store.SearchDocs(ctx, lib.ID, "api users", 4000)
+	apiOut, err := store.SearchDocs(ctx, lib.ID, "api users", 4000)
 	if err != nil {
 		t.Fatalf("SearchDocs(api users): %v", err)
 	}
-	if len(apiResults) == 0 {
+	if len(apiOut.Results) == 0 {
 		t.Error("expected search results for 'api users', got none")
 	} else {
-		t.Logf("search 'api users': %d results, first path=%s", len(apiResults), apiResults[0].Path)
+		t.Logf("search 'api users': %d results, first path=%s", len(apiOut.Results), apiOut.Results[0].Path)
 	}
 
 	// ---------------------------------------------------------------

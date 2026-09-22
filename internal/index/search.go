@@ -23,12 +23,19 @@ func buildFTSQuery(input string) string {
 	return strings.Join(quoted, " OR ")
 }
 
+// maxSearchRows caps the number of chunks considered for a single search.
+const maxSearchRows = 50
+
 // SearchDocs performs an FTS5 search using BM25 ranking and returns results
-// within the token budget (approximated as len(content)/4 tokens).
-func (s *Store) SearchDocs(ctx context.Context, libraryID int64, query string, maxTokens int) ([]SearchResult, error) {
+// within the token budget (approximated as len(content)/4 tokens). The first
+// result is always returned even if it exceeds the budget. Truncated is set
+// when matching chunks were left out.
+func (s *Store) SearchDocs(ctx context.Context, libraryID int64, query string, maxTokens int) (SearchOutput, error) {
+	var out SearchOutput
+
 	ftsQuery := buildFTSQuery(query)
 	if ftsQuery == "" {
-		return nil, nil
+		return out, nil
 	}
 
 	const q = `
@@ -36,30 +43,34 @@ func (s *Store) SearchDocs(ctx context.Context, libraryID int64, query string, m
 		FROM chunks
 		WHERE library_id = ? AND chunks MATCH ?
 		ORDER BY score ASC
-		LIMIT 50`
+		LIMIT ?`
 
-	rows, err := s.db.QueryContext(ctx, q, libraryID, ftsQuery)
+	rows, err := s.db.QueryContext(ctx, q, libraryID, ftsQuery, maxSearchRows+1)
 	if err != nil {
-		return nil, fmt.Errorf("fts search: %w", err)
+		return out, fmt.Errorf("fts search: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var results []SearchResult
 	tokensUsed := 0
 	for rows.Next() {
+		if len(out.Results) == maxSearchRows {
+			out.Truncated = true
+			break
+		}
 		var r SearchResult
 		if err := rows.Scan(&r.Path, &r.Breadcrumb, &r.Content, &r.Score); err != nil {
-			return nil, fmt.Errorf("scan search result: %w", err)
+			return SearchOutput{}, fmt.Errorf("scan search result: %w", err)
 		}
 		tokens := len(r.Content) / 4
-		if tokensUsed+tokens > maxTokens && len(results) > 0 {
+		if tokensUsed+tokens > maxTokens && len(out.Results) > 0 {
+			out.Truncated = true
 			break
 		}
 		tokensUsed += tokens
-		results = append(results, r)
+		out.Results = append(out.Results, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("search rows: %w", err)
+		return SearchOutput{}, fmt.Errorf("search rows: %w", err)
 	}
-	return results, nil
+	return out, nil
 }
