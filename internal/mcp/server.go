@@ -10,15 +10,24 @@ import (
 	"github.com/codanael/docserve/internal/index"
 )
 
+// Options configures the HTTP surface of the MCP server.
+type Options struct {
+	// AllowedOrigins lists browser origins (scheme://host[:port]) accepted in
+	// addition to loopback origins. Requests without an Origin header are
+	// always accepted.
+	AllowedOrigins []string
+}
+
 // Server wraps an MCP server with an HTTP handler.
 type Server struct {
 	mcpServer  *server.MCPServer
 	httpServer *server.StreamableHTTPServer
 	store      *index.Store
+	opts       Options
 }
 
 // NewServer creates a new MCP server with tool handlers registered.
-func NewServer(store *index.Store, version string) *Server {
+func NewServer(store *index.Store, version string, opts Options) *Server {
 	mcpSrv := server.NewMCPServer("docserve", version, server.WithToolCapabilities(false))
 
 	handlers := &ToolHandlers{Store: store}
@@ -55,12 +64,16 @@ func NewServer(store *index.Store, version string) *Server {
 		handlers.GetLibraryDocs,
 	)
 
-	httpSrv := server.NewStreamableHTTPServer(mcpSrv, server.WithEndpointPath("/mcp"))
+	// docserve keeps no per-session state, so run the transport stateless:
+	// no Mcp-Session-Id is issued or required, and legacy `initialize`
+	// clients and 2026-07-28 `server/discover` clients share the endpoint.
+	httpSrv := server.NewStreamableHTTPServer(mcpSrv, server.WithStateLess(true))
 
 	return &Server{
 		mcpServer:  mcpSrv,
 		httpServer: httpSrv,
 		store:      store,
+		opts:       opts,
 	}
 }
 
@@ -68,8 +81,10 @@ func NewServer(store *index.Store, version string) *Server {
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	// MCP streamable HTTP endpoint
-	mux.Handle("/mcp", s.httpServer)
+	// MCP streamable HTTP endpoint: Origin check → body limit → transport.
+	var mcpHandler http.Handler = http.MaxBytesHandler(s.httpServer, maxBodyBytes)
+	mcpHandler = originCheck(s.opts.AllowedOrigins, mcpHandler)
+	mux.Handle("/mcp", mcpHandler)
 
 	// Health check endpoints
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {

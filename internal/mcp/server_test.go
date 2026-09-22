@@ -22,7 +22,7 @@ func setupEmptyStore(t *testing.T) *index.Store {
 
 func TestMCPServerHealthz(t *testing.T) {
 	store := setupTestStore(t)
-	srv := NewServer(store, "test")
+	srv := NewServer(store, "test", Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
@@ -45,7 +45,7 @@ func TestMCPServerHealthz(t *testing.T) {
 
 func TestMCPServerReadyz(t *testing.T) {
 	store := setupTestStore(t)
-	srv := NewServer(store, "test")
+	srv := NewServer(store, "test", Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
@@ -62,7 +62,7 @@ func TestMCPServerReadyz(t *testing.T) {
 
 func TestMCPServerReadyzEmpty(t *testing.T) {
 	store := setupEmptyStore(t)
-	srv := NewServer(store, "test")
+	srv := NewServer(store, "test", Options{})
 	handler := srv.Handler()
 
 	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
@@ -79,7 +79,7 @@ func TestMCPServerReadyzEmpty(t *testing.T) {
 
 func TestMCPServerInitialize(t *testing.T) {
 	store := setupTestStore(t)
-	srv := NewServer(store, "test")
+	srv := NewServer(store, "test", Options{})
 	handler := srv.Handler()
 
 	body := `{
@@ -122,5 +122,72 @@ func TestMCPServerInitialize(t *testing.T) {
 
 	if serverInfo["name"] != "docserve" {
 		t.Errorf("expected serverInfo.name = 'docserve', got %q", serverInfo["name"])
+	}
+}
+
+func TestMCPServerToolsListWithoutSession(t *testing.T) {
+	store := setupTestStore(t)
+	handler := NewServer(store, "test", Options{}).Handler()
+
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 without Mcp-Session-Id, got %d: %s", w.Code, w.Body.String())
+	}
+	if w.Header().Get("Mcp-Session-Id") != "" {
+		t.Errorf("stateless server must not issue a session id")
+	}
+	var resp struct {
+		Result struct {
+			Tools []map[string]any `json:"tools"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(resp.Result.Tools) != 3 {
+		t.Errorf("expected 3 tools, got %d", len(resp.Result.Tools))
+	}
+}
+
+func TestMCPServerRejectsForeignOrigin(t *testing.T) {
+	store := setupTestStore(t)
+	handler := NewServer(store, "test", Options{}).Handler()
+
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", "https://evil.example")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+
+	// Health endpoints are not subject to the Origin check.
+	req = httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("Origin", "https://evil.example")
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("healthz with foreign origin: expected 200, got %d", w.Code)
+	}
+}
+
+func TestMCPServerBodyLimit(t *testing.T) {
+	store := setupTestStore(t)
+	handler := NewServer(store, "test", Options{}).Handler()
+
+	huge := `{"jsonrpc":"2.0","id":1,"method":"ping","params":{"pad":"` + strings.Repeat("x", 2<<20) + `"}}`
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(huge))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code == http.StatusOK {
+		t.Errorf("expected oversized body to be rejected, got 200")
 	}
 }

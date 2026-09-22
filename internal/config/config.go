@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -9,10 +10,11 @@ import (
 
 // Config holds the full docserve configuration.
 type Config struct {
-	DataDir string         `yaml:"data_dir"`
-	Listen  string         `yaml:"listen"`
-	Proxy   ProxyConfig    `yaml:"proxy"`
-	Sources []SourceConfig `yaml:"sources"`
+	DataDir        string         `yaml:"data_dir"`
+	Listen         string         `yaml:"listen"`
+	AllowedOrigins []string       `yaml:"allowed_origins"`
+	Proxy          ProxyConfig    `yaml:"proxy"`
+	Sources        []SourceConfig `yaml:"sources"`
 }
 
 // ProxyConfig holds HTTP/HTTPS proxy settings.
@@ -140,6 +142,13 @@ func Load(path string) (*Config, error) {
 
 // validate checks that the config is semantically correct.
 func validate(cfg *Config) error {
+	for _, o := range cfg.AllowedOrigins {
+		u, err := url.Parse(o)
+		if err != nil || u.Scheme == "" || u.Host == "" || u.Path != "" {
+			return fmt.Errorf("allowed_origins: %q must be scheme://host[:port] with no path", o)
+		}
+	}
+
 	if len(cfg.Sources) == 0 {
 		return fmt.Errorf("config must have at least one source")
 	}

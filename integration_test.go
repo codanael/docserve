@@ -175,7 +175,7 @@ func TestMCPProtocolFlow(t *testing.T) {
 	}
 
 	// 2. Create MCP server + httptest server.
-	srv := mcpsrv.NewServer(store, "test")
+	srv := mcpsrv.NewServer(store, "test", mcpsrv.Options{})
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 

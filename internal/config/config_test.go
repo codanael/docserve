@@ -478,6 +478,42 @@ func TestLibraryName(t *testing.T) {
 	})
 }
 
+func TestLoadConfigAllowedOrigins(t *testing.T) {
+	content := `
+allowed_origins:
+  - https://app.example.com
+  - http://intranet:3000
+sources:
+  - name: s
+    provider: github
+    repo: org/repo
+    refs:
+      - ref: main
+        paths: [docs/]
+`
+	cfg, err := config.Load(writeTempConfig(t, content))
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if len(cfg.AllowedOrigins) != 2 || cfg.AllowedOrigins[0] != "https://app.example.com" {
+		t.Errorf("AllowedOrigins = %v", cfg.AllowedOrigins)
+	}
+
+	bad := `
+allowed_origins: ["app.example.com"]
+sources:
+  - name: s
+    provider: github
+    repo: org/repo
+    refs:
+      - ref: main
+        paths: [docs/]
+`
+	if _, err := config.Load(writeTempConfig(t, bad)); err == nil {
+		t.Error("expected error for origin without scheme")
+	}
+}
+
 // writeTempConfig writes content to a temp file and returns its path.
 func writeTempConfig(t *testing.T, content string) string {
 	t.Helper()

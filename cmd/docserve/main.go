@@ -151,11 +151,18 @@ func cmdServe(args []string) {
 	}
 	sched.Start()
 
-	srv := mcpsrv.NewServer(store, version)
+	srv := mcpsrv.NewServer(store, version, mcpsrv.Options{
+		AllowedOrigins: cfg.AllowedOrigins,
+	})
 
 	httpSrv := &http.Server{
-		Addr:    cfg.Listen,
-		Handler: srv.Handler(),
+		Addr:              cfg.Listen,
+		Handler:           srv.Handler(),
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    64 << 10,
+		// WriteTimeout stays 0: SSE responses may be long-lived.
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
